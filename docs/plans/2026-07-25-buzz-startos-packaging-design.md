@@ -81,7 +81,7 @@ Keeping this repository separate avoids collisions with Buzz's existing root
 ## Upstream Pinning And Versioning
 
 The first package targets an exact snapshot of upstream `main`. The selected
-planning baseline is `c2a4ee711e481bb427d6cf8cd08b2c7329d1508c`, committed on
+planning baseline is `dd222a509b156ba52ed3219e895d7bf1cf322c92`, committed on
 2026-07-26 UTC. The implementation will re-check `upstream/main` before the
 first code commit; if it moved, the image and runtime contract review must be
 repeated before selecting a newer commit.

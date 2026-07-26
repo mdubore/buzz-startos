@@ -34,16 +34,16 @@ The planning baseline was current when this plan was written:
 
 | Component | Reference | OCI index digest |
 | --- | --- | --- |
-| Buzz | `ghcr.io/block/buzz:sha-c2a4ee7` | `sha256:0c4ca41d9623f6f7e9ff194bf8e307a04245be79cb2e800ea8034e1f2c76649f` |
+| Buzz | `ghcr.io/block/buzz:sha-dd222a5` | `sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9` |
 | PostgreSQL | `postgres:17.10-alpine3.24` | `sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193` |
 | Redis | `redis:7.4.9-alpine3.21` | `sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99` |
 | MinIO | `minio/minio:RELEASE.2025-09-07T16-13-09Z` | `sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e` |
 | MinIO client | `minio/mc:RELEASE.2025-08-13T08-35-41Z` | `sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727` |
 
 The selected upstream commit is
-`c2a4ee711e481bb427d6cf8cd08b2c7329d1508c`, committed at
-`2026-07-26T02:51:09Z`. Its relay crate version is `0.2.0`; the package ExVer
-is `0.2.0-main.20260726.t025109.c2a4ee7:0`.
+`dd222a509b156ba52ed3219e895d7bf1cf322c92`, committed at
+`2026-07-26T07:57:31Z`. Its relay crate version is `0.2.0`; the package ExVer
+is `0.2.0-main.20260726.t075731.dd222a5:0`.
 
 If Task 2 selects a newer upstream commit, replace every Buzz SHA, digest,
 timestamp, version, release note, and source link in this plan as one reviewed
@@ -173,7 +173,9 @@ untracked packaging workspace.
 ### Task 2: Fast-Forward `buzz9` And Freeze The Runtime Contract
 
 **Files:**
-- Create: `docs/upstream/c2a4ee7-runtime-contract.md`
+- Create: `docs/upstream/dd222a5-runtime-contract.md`
+- Modify: `docs/plans/2026-07-25-buzz-startos-packaging-design.md`
+- Modify: `docs/plans/2026-07-25-buzz-startos-implementation.md`
 - Do not create or modify downstream files in: `../buzz9/`
 
 **Step 1: Clone or update the source mirror**
@@ -203,7 +205,8 @@ git -C "$BUZZ9" rev-list --left-right --count origin/main...upstream/main
 If `buzz9` already exists, skip `clone`; ensure `origin` and `upstream` exactly
 match the URLs above. Expected before synchronization: the ancestor check exits
 zero and the count is `0 N`, proving the fork has no downstream commits. At
-this plan refresh the remote count is `0 48`.
+this refresh the recorded count immediately before synchronization was `0 1`;
+after the fast-forward and push it is `0 0`.
 
 **Step 2: Select the current upstream commit**
 
@@ -212,19 +215,24 @@ Run:
 ```bash
 BUZZ9=/home/missydog/Desktop/Learnding/Tools/Buzz/buzz9
 git -C "$BUZZ9" rev-parse upstream/main
-git -C "$BUZZ9" show -s --format='%H%n%cI%n%s' upstream/main
+TZ=UTC git -C "$BUZZ9" show -s \
+  --date=format-local:'%Y-%m-%dT%H:%M:%SZ' \
+  --format='%H%n%cd%n%s' upstream/main
 git -C "$BUZZ9" show upstream/main:crates/buzz-relay/Cargo.toml |
   sed -n '1,20p'
 ```
 
-Expected for this plan: full SHA `c2a4ee711e481bb427d6cf8cd08b2c7329d1508c`,
-timestamp `2026-07-26T02:51:09+00:00`, and relay version `0.2.0`.
+Expected for this plan: full SHA `dd222a509b156ba52ed3219e895d7bf1cf322c92`,
+timestamp `2026-07-26T07:57:31Z`, and relay version `0.2.0`.
 
-The refresh from the earlier planning baseline `8eb6e3e` contains five
-desktop, desktop-packaging, README, or release-workflow commits. The
-Dockerfile, relay/admin/database/media crates, migrations, bundled web trees,
-and production Compose tree are byte-identical. Record that evidence, but
-still perform the full contract checks below for the selected image.
+The refresh from the earlier planning baseline `8eb6e3e` contains six
+commits. The first five affect desktop, desktop packaging, README, or the
+release workflow. The sixth, from the historical prior selected commit
+`c2a4ee711e481bb427d6cf8cd08b2c7329d1508c` to the current selection, is
+mobile-only. The Dockerfile, relay/admin/database/media crates, migrations,
+bundled web trees, and production Compose tree are byte-identical across all
+three revisions. Record that evidence, but still perform the full contract
+checks below for the selected image.
 
 If the SHA differs, stop. Repeat the Dockerfile, Compose, migrations, config,
 admin CLI, health, persistence, and route audit before updating the selected
@@ -250,7 +258,7 @@ not add a merge commit.
 **Step 4: Write the runtime contract record**
 
 Create
-`/home/missydog/Desktop/Learnding/Tools/Buzz/buzz-startos/docs/upstream/c2a4ee7-runtime-contract.md`
+`/home/missydog/Desktop/Learnding/Tools/Buzz/buzz-startos/docs/upstream/dd222a5-runtime-contract.md`
 with:
 
 - full source SHA, commit timestamp, relay crate version, and immutable image
@@ -277,8 +285,11 @@ Run:
 ```bash
 PACKAGE=/home/missydog/Desktop/Learnding/Tools/Buzz/buzz-startos
 git -C "$PACKAGE" diff --check
-git -C "$PACKAGE" add docs/upstream/c2a4ee7-runtime-contract.md
-git -C "$PACKAGE" commit -m "docs: record packaged Buzz snapshot"
+git -C "$PACKAGE" add -A docs/upstream
+git -C "$PACKAGE" add \
+  docs/plans/2026-07-25-buzz-startos-packaging-design.md \
+  docs/plans/2026-07-25-buzz-startos-implementation.md
+git -C "$PACKAGE" commit --amend --no-edit
 ```
 
 Expected: one package-repository documentation commit and no new commit in
@@ -423,7 +434,7 @@ git commit -m "chore: scaffold StartOS package"
 Create `tests/image-pins.test.ts` with assertions that:
 
 ```typescript
-assert.equal(UPSTREAM.commit, 'c2a4ee711e481bb427d6cf8cd08b2c7329d1508c')
+assert.equal(UPSTREAM.commit, 'dd222a509b156ba52ed3219e895d7bf1cf322c92')
 assert.equal(UPSTREAM.shortCommit, UPSTREAM.commit.slice(0, 7))
 assert.equal(
   IMAGE_PINS.buzz.tagReference,
@@ -477,19 +488,19 @@ export const packedImageReference = (pin: ImagePin) =>
   `${pin.tagReference}@${pin.indexDigest}`
 
 export const UPSTREAM = {
-  commit: 'c2a4ee711e481bb427d6cf8cd08b2c7329d1508c',
-  shortCommit: 'c2a4ee7',
-  committedAt: '2026-07-26T02:51:09Z',
+  commit: 'dd222a509b156ba52ed3219e895d7bf1cf322c92',
+  shortCommit: 'dd222a5',
+  committedAt: '2026-07-26T07:57:31Z',
   relayVersion: '0.2.0',
 } as const
 
 export const IMAGE_PINS = {
   buzz: {
-    tagReference: 'ghcr.io/block/buzz:sha-c2a4ee7',
-    indexDigest: 'sha256:0c4ca41d9623f6f7e9ff194bf8e307a04245be79cb2e800ea8034e1f2c76649f',
+    tagReference: 'ghcr.io/block/buzz:sha-dd222a5',
+    indexDigest: 'sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9',
     platforms: {
-      amd64: 'sha256:2f58603651517af2d762045bc1d50faf295565589d308006fe2ce1301fc64257',
-      arm64: 'sha256:ca81624e9f08cdfa46642c982e633b05a9a0f2ea067154be201cd3a1d7044592',
+      amd64: 'sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152',
+      arm64: 'sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7',
     },
   },
   postgres: {
@@ -1007,7 +1018,7 @@ Assert:
 - no package dependencies;
 - five image references come from `IMAGE_PINS`;
 - every image advertises only `x86_64` and `aarch64`;
-- version is `0.2.0-main.20260726.t025109.c2a4ee7:0`.
+- version is `0.2.0-main.20260726.t075731.dd222a5:0`.
 
 **Step 2: Verify red**
 
@@ -1074,7 +1085,7 @@ runtime and backup policy. This keeps every intermediate commit type-correct.
 Set the current ExVer literal to:
 
 ```text
-0.2.0-main.20260726.t025109.c2a4ee7:0
+0.2.0-main.20260726.t075731.dd222a5:0
 ```
 
 Use localized release notes in `en_US`, `es_ES`, `de_DE`, `pl_PL`, and
@@ -1603,6 +1614,9 @@ Cover:
 - remove command is
   `['buzz-admin', 'remove-member', '--pubkey', hex, '--role', role]`;
 - list command is `['buzz-admin', 'list-members']`;
+- add/remove environments contain exactly `DATABASE_URL`, `REDIS_URL`,
+  `RELAY_URL`, and `BUZZ_RELAY_PRIVATE_KEY`;
+- the list environment contains exactly `DATABASE_URL` and `RELAY_URL`;
 - commands are arrays and never shell strings.
 
 **Step 2: Write failing serialization tests**
@@ -1638,10 +1652,12 @@ yielding the queue to another mutation:
 1. call `readStoredStateOnce()` and require a `ready` result;
 2. read `lastMembershipMutationUnixSecond` from that fresh result and wait
    until a later Unix second;
-3. build runtime config from the same validated result;
+3. build runtime config from the same validated result and project an
+   add/remove environment containing exactly `DATABASE_URL`, `REDIS_URL`,
+   `RELAY_URL`, and `BUZZ_RELAY_PRIVATE_KEY`;
 4. create a temporary Buzz subcontainer with no persistent mounts;
-5. execute `buzz-admin` with the required DB, Redis, relay URL, and relay-key
-   environment through `execFail`;
+5. execute `buzz-admin` with that four-variable environment through
+   `execFail`;
 6. write the attempted mutation second before the queued closure finishes,
    including when the command fails;
 7. release the module-level promise queue in `finally`.
@@ -1650,7 +1666,9 @@ No state read used for scheduling a mutation may occur before queue
 acquisition. This makes the persisted timestamp authoritative for the next
 queued caller as well as for the first caller after a package-process restart.
 
-List does not need the mutation delay.
+List does not need the mutation delay. It still requires a fresh `ready` state,
+but projects an environment containing only `DATABASE_URL` and `RELAY_URL`
+before executing `buzz-admin list-members`.
 
 **Step 5: Implement StartOS forms**
 
@@ -1665,7 +1683,9 @@ Add and remove use:
 - no database URL, Redis URL, relay private key, or HMAC secret in results.
 
 List is input-free, running-only, and returns `buzz-admin` stdout as a
-copyable unmasked value. Propagate nonzero exits as action failures.
+copyable unmasked value. Its process environment must not include `REDIS_URL`,
+`BUZZ_RELAY_PRIVATE_KEY`, or any unrelated daemon secret. Propagate nonzero
+exits as action failures.
 
 **Step 6: Verify and commit**
 
@@ -1790,7 +1810,7 @@ git commit -m "feat: back up authoritative Buzz state"
 - Create: `scripts/verify-s9pk-signer.sh`
 - Create: `CONTRIBUTING.md`
 - Create: `docs/testing/DEVICE_TEST_MATRIX.md`
-- Create: `docs/releases/v0.2.0-main.20260726.t025109.c2a4ee7_0.md`
+- Create: `docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md`
 
 **Step 1: Import pinned upstream-owned assets**
 
@@ -1798,9 +1818,9 @@ Run:
 
 ```bash
 curl -fsSLo icon.svg \
-  https://raw.githubusercontent.com/block/buzz/c2a4ee711e481bb427d6cf8cd08b2c7329d1508c/desktop/public/buzz.svg
+  https://raw.githubusercontent.com/block/buzz/dd222a509b156ba52ed3219e895d7bf1cf322c92/desktop/public/buzz.svg
 curl -fsSLo LICENSE \
-  https://raw.githubusercontent.com/block/buzz/c2a4ee711e481bb427d6cf8cd08b2c7329d1508c/LICENSE
+  https://raw.githubusercontent.com/block/buzz/dd222a509b156ba52ed3219e895d7bf1cf322c92/LICENSE
 wc -c icon.svg
 ```
 
@@ -2372,7 +2392,7 @@ made in response to a failing gate.
 
 **Files:**
 - Modify: `docs/testing/DEVICE_TEST_MATRIX.md`
-- Modify: `docs/releases/v0.2.0-main.20260726.t025109.c2a4ee7_0.md`
+- Modify: `docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md`
 - Modify only after measurement: `startos/manifest/index.ts`
 - Modify only after measurement: localized release notes if behavior changed
 
@@ -2540,7 +2560,7 @@ Run:
 npm test
 npm run check
 git diff --check
-git add docs/testing/DEVICE_TEST_MATRIX.md docs/releases/v0.2.0-main.20260726.t025109.c2a4ee7_0.md startos/manifest/index.ts startos/versions/current.ts
+git add docs/testing/DEVICE_TEST_MATRIX.md docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md startos/manifest/index.ts startos/versions/current.ts
 git commit -m "test: record StartOS device verification"
 ```
 
@@ -2641,9 +2661,9 @@ notes must name the untested matrix item. Never call it production-ready.
 StartOS release tags replace the ExVer colon with an underscore:
 
 ```bash
-git tag -a v0.2.0-main.20260726.t025109.c2a4ee7_0 \
-  -m "Buzz relay main snapshot c2a4ee7 for StartOS"
-git push origin v0.2.0-main.20260726.t025109.c2a4ee7_0
+git tag -a v0.2.0-main.20260726.t075731.dd222a5_0 \
+  -m "Buzz relay main snapshot dd222a5 for StartOS"
+git push origin v0.2.0-main.20260726.t075731.dd222a5_0
 ```
 
 Expected: `release.yml` creates a GitHub prerelease containing separate x86_64
@@ -2655,7 +2675,7 @@ Wait for the release workflow and its protected-environment approval to
 complete. Download the release assets to a directory outside the repository:
 
 ```bash
-TAG=v0.2.0-main.20260726.t025109.c2a4ee7_0
+TAG=v0.2.0-main.20260726.t075731.dd222a5_0
 RELEASE_DIR="$(mktemp -d)"
 printf 'Release verification directory: %s\n' "$RELEASE_DIR"
 gh release download "$TAG" \
