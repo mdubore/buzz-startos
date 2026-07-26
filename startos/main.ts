@@ -27,6 +27,64 @@ type ExecResult = {
   stdout?: string | Buffer
 }
 
+function createLateDeliveringAbortController(parentSignal: AbortSignal) {
+  const controller = new AbortController()
+  const commandSignal = controller.signal
+  const nativeAddEventListener =
+    commandSignal.addEventListener.bind(commandSignal)
+
+  // SDK 2.0.9 registers after async container setup and misses an earlier abort.
+  Object.defineProperty(commandSignal, 'addEventListener', {
+    configurable: true,
+    value: ((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      nativeAddEventListener(type, listener, options)
+      if (type !== 'abort' || !commandSignal.aborted) return
+
+      queueMicrotask(() => {
+        const event = new Event('abort')
+        if (typeof listener === 'function') {
+          listener.call(commandSignal, event)
+        } else {
+          listener.handleEvent(event)
+        }
+      })
+    }) satisfies AbortSignal['addEventListener'],
+  })
+
+  const forwardAbort = () => controller.abort(parentSignal.reason)
+  parentSignal.addEventListener('abort', forwardAbort, { once: true })
+  if (parentSignal.aborted) forwardAbort()
+
+  return {
+    controller,
+    dispose: () => parentSignal.removeEventListener('abort', forwardAbort),
+  }
+}
+
+async function runAbortableCommand(
+  parentSignal: AbortSignal,
+  run: (controller: AbortController) => Promise<unknown>,
+) {
+  parentSignal.throwIfAborted()
+  const linked = createLateDeliveringAbortController(parentSignal)
+
+  try {
+    try {
+      await run(linked.controller)
+    } catch (error) {
+      parentSignal.throwIfAborted()
+      throw error
+    }
+    parentSignal.throwIfAborted()
+  } finally {
+    linked.dispose()
+  }
+}
+
 async function commandSucceeded(
   run: () => Promise<ExecResult>,
   expectedStdout?: string,
@@ -183,32 +241,23 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
       subcontainer: mcSub,
       exec: {
         fn: async (subcontainer, signal) => {
-          const commandAbort = new AbortController()
-          const forwardAbort = () => commandAbort.abort(signal.reason)
-          signal.addEventListener('abort', forwardAbort)
-
-          try {
-            if (signal.aborted) forwardAbort()
-            signal.throwIfAborted()
-            await subcontainer.execFail(
+          await runAbortableCommand(signal, (commandAbort) =>
+            subcontainer.execFail(
               ['mc', 'mb', '--ignore-existing', `local/${S3_BUCKET}`],
               { env: { MC_HOST_local: mcHost } },
               30_000,
               commandAbort,
-            )
-
-            signal.throwIfAborted()
-            await subcontainer.execFail(
+            ),
+          )
+          await runAbortableCommand(signal, (commandAbort) =>
+            subcontainer.execFail(
               ['mc', 'anonymous', 'set', 'none', `local/${S3_BUCKET}`],
               { env: { MC_HOST_local: mcHost } },
               30_000,
               commandAbort,
-            )
-            signal.throwIfAborted()
-            return null
-          } finally {
-            signal.removeEventListener('abort', forwardAbort)
-          }
+            ),
+          )
+          return null
         },
       },
       requires: ['minio'],

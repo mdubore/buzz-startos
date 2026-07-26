@@ -360,7 +360,8 @@ test('bucket creation uses sequential secret-free argv with scoped encoded env',
     [30_000, 30_000],
   )
   assert.ok(calls[0]?.abort instanceof AbortController)
-  assert.equal(calls[0]?.abort, calls[1]?.abort)
+  assert.ok(calls[1]?.abort instanceof AbortController)
+  assert.notEqual(calls[0]?.abort, calls[1]?.abort)
   assert.notEqual(calls[0]?.options?.env, calls[1]?.options?.env)
   assert.equal(
     JSON.stringify(calls.map(({ command }) => command)).includes('access'),
@@ -410,6 +411,131 @@ test('bucket cancellation after the first command prevents the ACL mutation', as
     ['mc', 'mb', '--ignore-existing', 'local/buzz-media'],
   ])
   assert.ok(forwardedAbort instanceof AbortController)
+})
+
+test('bucket cancellation normalizes a killed command rejection', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const createBucket = stack.entries[3]
+  if (createBucket.kind !== 'oneshot' || !('fn' in createBucket.exec)) {
+    throw new Error('create-bucket must be a function oneshot')
+  }
+
+  const cancellation = new AbortController()
+  const commands: string[][] = []
+  const commandFailure = Object.assign(new Error('killed by cancellation'), {
+    name: 'ExitError',
+  })
+  const rejectingSubcontainer = {
+    async execFail(
+      command: string[],
+      _options: unknown,
+      _timeoutMs: number | null | undefined,
+      abort: AbortController | undefined,
+    ) {
+      commands.push(command)
+      cancellation.abort()
+      assert.equal(abort?.signal.aborted, true)
+      throw commandFailure
+    },
+  }
+
+  await assert.rejects(
+    Reflect.apply(createBucket.exec.fn, undefined, [
+      rejectingSubcontainer,
+      cancellation.signal,
+    ]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error)
+      assert.equal(error.name, 'AbortError')
+      assert.equal(String(error).includes('access@:/%'), false)
+      assert.equal(String(error).includes('secret@:/%'), false)
+      return true
+    },
+  )
+  assert.deepEqual(commands, [
+    ['mc', 'mb', '--ignore-existing', 'local/buzz-media'],
+  ])
+})
+
+test('bucket cancellation reaches a listener registered after command startup', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const createBucket = stack.entries[3]
+  if (createBucket.kind !== 'oneshot' || !('fn' in createBucket.exec)) {
+    throw new Error('create-bucket must be a function oneshot')
+  }
+
+  const cancellation = new AbortController()
+  let releaseRegistration!: () => void
+  let markSecondCommandStarted!: () => void
+  const registrationGate = new Promise<void>((resolve) => {
+    releaseRegistration = resolve
+  })
+  const secondCommandStarted = new Promise<void>((resolve) => {
+    markSecondCommandStarted = resolve
+  })
+  let calls = 0
+  let lateAbortObserved = false
+  let mutationRan = false
+  const delayedSubcontainer = {
+    async execFail(
+      _command: string[],
+      _options: unknown,
+      _timeoutMs: number | null | undefined,
+      abort: AbortController | undefined,
+    ) {
+      calls += 1
+      if (calls === 1) return { stdout: '', stderr: '' }
+
+      markSecondCommandStarted()
+      await registrationGate
+      abort?.signal.addEventListener('abort', () => {
+        lateAbortObserved = true
+      })
+      await Promise.resolve()
+      if (!lateAbortObserved) mutationRan = true
+      return { stdout: '', stderr: '' }
+    },
+  }
+
+  const rejected = assert.rejects(
+    Reflect.apply(createBucket.exec.fn, undefined, [
+      delayedSubcontainer,
+      cancellation.signal,
+    ]),
+    { name: 'AbortError' },
+  )
+  await secondCommandStarted
+  cancellation.abort()
+  releaseRegistration()
+  await rejected
+
+  assert.equal(lateAbortObserved, true)
+  assert.equal(mutationRan, false)
+})
+
+test('bucket setup preserves a genuine MinIO client failure', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const createBucket = stack.entries[3]
+  if (createBucket.kind !== 'oneshot' || !('fn' in createBucket.exec)) {
+    throw new Error('create-bucket must be a function oneshot')
+  }
+
+  const commandFailure = Object.assign(new Error('mc failed'), {
+    name: 'ExitError',
+  })
+  const failingSubcontainer = {
+    async execFail() {
+      throw commandFailure
+    },
+  }
+
+  await assert.rejects(
+    Reflect.apply(createBucket.exec.fn, undefined, [
+      failingSubcontainer,
+      new AbortController().signal,
+    ]),
+    (error: unknown) => error === commandFailure,
+  )
 })
 
 test('an already-aborted bucket oneshot never invokes MinIO client', async () => {
