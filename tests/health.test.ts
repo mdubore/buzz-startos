@@ -320,13 +320,17 @@ test('bucket creation uses sequential secret-free argv with scoped encoded env',
   const calls: {
     command: string[]
     options: { env?: Record<string, string | undefined> } | undefined
+    timeoutMs: number | null | undefined
+    abort: AbortController | undefined
   }[] = []
   const recordingSubcontainer = {
     async execFail(
       command: string[],
       options?: { env?: Record<string, string | undefined> },
+      timeoutMs?: number | null,
+      abort?: AbortController,
     ) {
-      calls.push({ command, options })
+      calls.push({ command, options, timeoutMs, abort })
       return { stdout: '', stderr: '' }
     },
   }
@@ -338,16 +342,25 @@ test('bucket creation uses sequential secret-free argv with scoped encoded env',
 
   const mcHost = 'http://access%40%3A%2F%25:secret%40%3A%2F%25@127.0.0.1:9000'
   assert.equal(result, null)
-  assert.deepEqual(calls, [
-    {
-      command: ['mc', 'mb', '--ignore-existing', 'local/buzz-media'],
-      options: { env: { MC_HOST_local: mcHost } },
-    },
-    {
-      command: ['mc', 'anonymous', 'set', 'none', 'local/buzz-media'],
-      options: { env: { MC_HOST_local: mcHost } },
-    },
-  ])
+  assert.deepEqual(
+    calls.map(({ command, options }) => ({ command, options })),
+    [
+      {
+        command: ['mc', 'mb', '--ignore-existing', 'local/buzz-media'],
+        options: { env: { MC_HOST_local: mcHost } },
+      },
+      {
+        command: ['mc', 'anonymous', 'set', 'none', 'local/buzz-media'],
+        options: { env: { MC_HOST_local: mcHost } },
+      },
+    ],
+  )
+  assert.deepEqual(
+    calls.map(({ timeoutMs }) => timeoutMs),
+    [30_000, 30_000],
+  )
+  assert.ok(calls[0]?.abort instanceof AbortController)
+  assert.equal(calls[0]?.abort, calls[1]?.abort)
   assert.notEqual(calls[0]?.options?.env, calls[1]?.options?.env)
   assert.equal(
     JSON.stringify(calls.map(({ command }) => command)).includes('access'),
@@ -357,6 +370,73 @@ test('bucket creation uses sequential secret-free argv with scoped encoded env',
     JSON.stringify(calls.map(({ command }) => command)).includes('secret'),
     false,
   )
+})
+
+test('bucket cancellation after the first command prevents the ACL mutation', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const createBucket = stack.entries[3]
+  if (createBucket.kind !== 'oneshot' || !('fn' in createBucket.exec)) {
+    throw new Error('create-bucket must be a function oneshot')
+  }
+
+  const cancellation = new AbortController()
+  const commands: string[][] = []
+  let forwardedAbort: AbortController | undefined
+  const recordingSubcontainer = {
+    async execFail(
+      command: string[],
+      _options: unknown,
+      timeoutMs: number | null | undefined,
+      abort: AbortController | undefined,
+    ) {
+      commands.push(command)
+      assert.equal(timeoutMs, 30_000)
+      forwardedAbort = abort
+      cancellation.abort()
+      assert.equal(abort?.signal.aborted, true)
+      await Promise.resolve()
+      return { stdout: '', stderr: '' }
+    },
+  }
+
+  await assert.rejects(
+    Reflect.apply(createBucket.exec.fn, undefined, [
+      recordingSubcontainer,
+      cancellation.signal,
+    ]),
+    { name: 'AbortError' },
+  )
+  assert.deepEqual(commands, [
+    ['mc', 'mb', '--ignore-existing', 'local/buzz-media'],
+  ])
+  assert.ok(forwardedAbort instanceof AbortController)
+})
+
+test('an already-aborted bucket oneshot never invokes MinIO client', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const createBucket = stack.entries[3]
+  if (createBucket.kind !== 'oneshot' || !('fn' in createBucket.exec)) {
+    throw new Error('create-bucket must be a function oneshot')
+  }
+
+  const cancellation = new AbortController()
+  cancellation.abort()
+  let calls = 0
+  const recordingSubcontainer = {
+    async execFail() {
+      calls += 1
+      return { stdout: '', stderr: '' }
+    },
+  }
+
+  await assert.rejects(
+    Reflect.apply(createBucket.exec.fn, undefined, [
+      recordingSubcontainer,
+      cancellation.signal,
+    ]),
+    { name: 'AbortError' },
+  )
+  assert.equal(calls, 0)
 })
 
 test('Redis readiness requires PONG and keeps its password out of argv', async () => {

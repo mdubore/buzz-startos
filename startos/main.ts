@@ -182,16 +182,33 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
     .addOneshot('create-bucket', {
       subcontainer: mcSub,
       exec: {
-        fn: async (subcontainer) => {
-          await subcontainer.execFail(
-            ['mc', 'mb', '--ignore-existing', `local/${S3_BUCKET}`],
-            { env: { MC_HOST_local: mcHost } },
-          )
-          await subcontainer.execFail(
-            ['mc', 'anonymous', 'set', 'none', `local/${S3_BUCKET}`],
-            { env: { MC_HOST_local: mcHost } },
-          )
-          return null
+        fn: async (subcontainer, signal) => {
+          const commandAbort = new AbortController()
+          const forwardAbort = () => commandAbort.abort(signal.reason)
+          signal.addEventListener('abort', forwardAbort)
+
+          try {
+            if (signal.aborted) forwardAbort()
+            signal.throwIfAborted()
+            await subcontainer.execFail(
+              ['mc', 'mb', '--ignore-existing', `local/${S3_BUCKET}`],
+              { env: { MC_HOST_local: mcHost } },
+              30_000,
+              commandAbort,
+            )
+
+            signal.throwIfAborted()
+            await subcontainer.execFail(
+              ['mc', 'anonymous', 'set', 'none', `local/${S3_BUCKET}`],
+              { env: { MC_HOST_local: mcHost } },
+              30_000,
+              commandAbort,
+            )
+            signal.throwIfAborted()
+            return null
+          } finally {
+            signal.removeEventListener('abort', forwardAbort)
+          }
         },
       },
       requires: ['minio'],
