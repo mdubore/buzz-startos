@@ -114,7 +114,7 @@ export function validateStoredState(input: StoredStateRead): StateValidation {
   if (raw.lastMembershipMutationUnixSecond !== undefined) {
     if (
       typeof raw.lastMembershipMutationUnixSecond !== 'number' ||
-      !Number.isInteger(raw.lastMembershipMutationUnixSecond) ||
+      !Number.isSafeInteger(raw.lastMembershipMutationUnixSecond) ||
       raw.lastMembershipMutationUnixSecond < 0
     ) {
       issues.push('lastMembershipMutationUnixSecond')

@@ -9,29 +9,43 @@ import {
   readStoredStateOnce,
   type StoredStateRead,
 } from '../fileModels/read-store.js'
-import { storeJson } from '../fileModels/store.json.js'
+import {
+  storeJson,
+  withStoreMutation,
+  type StoreMutationQueue,
+} from '../fileModels/store.json.js'
 import { sdk } from '../sdk'
 
 export type SeedSecretsDependencies = {
   readStoredStateOnce: () => Promise<StoredStateRead>
   mergeStore: (patch: Partial<StableSecrets>) => Promise<unknown>
   generateSecrets: () => GeneratedSecrets
+  withStoreMutation: StoreMutationQueue
 }
 
 export async function seedSecretsForInit(
   kind: InitKind,
   dependencies: SeedSecretsDependencies,
 ): Promise<void> {
-  const stored = await dependencies.readStoredStateOnce()
-  if (kind !== 'install' || stored.kind === 'unreadable') return
+  if (kind !== 'install') {
+    await dependencies.readStoredStateOnce()
+    return
+  }
 
-  const current = stored.kind === 'missing' ? {} : stored.value
-  const patch = missingSecretsForInit(
-    kind,
-    current,
-    dependencies.generateSecrets,
-  )
-  await dependencies.mergeStore(patch)
+  await dependencies.withStoreMutation(async () => {
+    const stored = await dependencies.readStoredStateOnce()
+    if (stored.kind === 'unreadable') return
+
+    const current = stored.kind === 'missing' ? {} : stored.value
+    const patch = missingSecretsForInit(
+      kind,
+      current,
+      dependencies.generateSecrets,
+    )
+    if (Object.keys(patch).length === 0) return
+
+    await dependencies.mergeStore(patch)
+  })
 }
 
 export const seedSecrets = sdk.setupOnInit(async (effects, kind) => {
@@ -39,5 +53,6 @@ export const seedSecrets = sdk.setupOnInit(async (effects, kind) => {
     readStoredStateOnce,
     mergeStore: (patch) => storeJson.merge(effects, patch),
     generateSecrets: generateStableSecrets,
+    withStoreMutation,
   })
 })

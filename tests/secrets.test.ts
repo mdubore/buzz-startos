@@ -155,3 +155,23 @@ test('generation rejects invalid relay scalars from an injected provider', () =>
     )
   }
 })
+
+test('generation snapshots a valid relay scalar before provider buffer reuse', () => {
+  const relayPrivateKeyHex = `${'0'.repeat(63)}1`
+  const shared = Uint8Array.from(Buffer.from(relayPrivateKeyHex, 'hex'))
+
+  const generated = generateStableSecrets({
+    generateRelaySecretKey: () => shared,
+    randomBytes: () => {
+      shared.fill(0)
+      return shared
+    },
+  })
+
+  assert.equal(generated.relayPrivateKeyHex, relayPrivateKeyHex)
+  assert.doesNotThrow(() =>
+    getPublicKey(
+      Uint8Array.from(Buffer.from(generated.relayPrivateKeyHex, 'hex')),
+    ),
+  )
+})

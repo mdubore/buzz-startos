@@ -26,6 +26,10 @@ export type RawStoreText = {
   text: string
 }
 
+export type StoreMutationQueue = <Result>(
+  mutation: () => Promise<Result>,
+) => Promise<Result>
+
 const rawStoreTextShape = z.object({ text: z.string() })
 
 export const storeJson = FileHelper.json(storePath, rawStoredStateShape)
@@ -36,3 +40,19 @@ export const storeRawText = FileHelper.raw<RawStoreText>(
   (text) => ({ text }),
   (value) => rawStoreTextShape.parse(value),
 )
+
+export function createStoreMutationQueue(): StoreMutationQueue {
+  let tail = Promise.resolve()
+
+  // Use only as the outer state-mutation boundary; nesting on one queue blocks.
+  return <Result>(mutation: () => Promise<Result>) => {
+    const result = tail.then(mutation)
+    tail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+}
+
+export const withStoreMutation = createStoreMutationQueue()

@@ -20,6 +20,7 @@ import {
   type StoredStateRead,
 } from '../startos/fileModels/read-store.js'
 import {
+  createStoreMutationQueue,
   storeRawText,
   type RawStoreText,
   type RawStoredState,
@@ -254,10 +255,20 @@ test('membership timestamp is optional but must be a nonnegative integer', () =>
     ).kind,
     'ready',
   )
+  assert.equal(
+    validateStoredState(
+      parsed({
+        ...COMPLETE_STORE,
+        lastMembershipMutationUnixSecond: Number.MAX_SAFE_INTEGER,
+      }),
+    ).kind,
+    'ready',
+  )
 
   for (const lastMembershipMutationUnixSecond of [
     -1,
     1.5,
+    Number.MAX_SAFE_INTEGER + 1,
     Number.NaN,
     '42',
     null,
@@ -451,6 +462,7 @@ function seedDependencies(
       calls.generates += 1
       return GENERATED
     },
+    withStoreMutation: createStoreMutationQueue(),
   }
 }
 
@@ -495,6 +507,99 @@ test('install preserves present malformed fields and fills only absent ones', as
       gitHookHmacSecretHex: GENERATED.gitHookHmacSecretHex,
     },
   ])
+})
+
+test('concurrent installs serialize the authoritative read through merge', async () => {
+  let stored: RawStoredState = {}
+  let reads = 0
+  let merges = 0
+  let generations = 0
+  let releaseFirstMerge!: () => void
+  let markFirstMergeStarted!: () => void
+  const firstMergeStarted = new Promise<void>((resolve) => {
+    markFirstMergeStarted = resolve
+  })
+  const firstMergeRelease = new Promise<void>((resolve) => {
+    releaseFirstMerge = resolve
+  })
+  const withStoreMutation = createStoreMutationQueue()
+  const common = {
+    readStoredStateOnce: async (): Promise<StoredStateRead> => {
+      reads += 1
+      return parsed(structuredClone(stored))
+    },
+    mergeStore: async (patch: Partial<typeof VALID_SECRETS>) => {
+      merges += 1
+      if (merges === 1) {
+        markFirstMergeStarted()
+        await firstMergeRelease
+      }
+      stored = { ...stored, ...patch }
+    },
+    withStoreMutation,
+  }
+
+  const first = seedSecretsForInit('install', {
+    ...common,
+    generateSecrets: () => {
+      generations += 1
+      return GENERATED
+    },
+  })
+  await firstMergeStarted
+
+  const secondGenerated: GeneratedSecrets = {
+    ...GENERATED,
+    postgresPassword: 'Z'.repeat(32),
+  }
+  const second = seedSecretsForInit('install', {
+    ...common,
+    generateSecrets: () => {
+      generations += 1
+      return secondGenerated
+    },
+  })
+
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  releaseFirstMerge()
+  await Promise.all([first, second])
+
+  assert.equal(reads, 2)
+  assert.equal(generations, 1)
+  assert.equal(merges, 1)
+  assert.deepEqual(stored, { schemaVersion: 1, ...GENERATED })
+})
+
+test('install skips merge when the authoritative state needs no patch', async () => {
+  const calls = { reads: 0, merges: [], generates: 0 } as {
+    reads: number
+    merges: Partial<typeof VALID_SECRETS>[]
+    generates: number
+  }
+
+  await seedSecretsForInit(
+    'install',
+    seedDependencies(parsed({ ...COMPLETE_STORE }), calls),
+  )
+
+  assert.deepEqual(calls, { reads: 1, merges: [], generates: 0 })
+})
+
+test('store mutation queue releases the next mutation after a failure', async () => {
+  const withStoreMutation = createStoreMutationQueue()
+  const order: string[] = []
+  const first = withStoreMutation(async () => {
+    order.push('first')
+    throw new Error('expected mutation failure')
+  })
+  const second = withStoreMutation(async () => {
+    order.push('second')
+    return 'completed'
+  })
+
+  await assert.rejects(first, /expected mutation failure/)
+  assert.equal(await second, 'completed')
+  assert.deepEqual(order, ['first', 'second'])
 })
 
 test('safe seeding never writes unreadable or non-install state', async () => {

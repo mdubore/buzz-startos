@@ -68,7 +68,7 @@ function randomAlphanumeric(
 export function generateStableSecrets(
   providers: SecretProviders = defaultProviders,
 ): GeneratedSecrets {
-  const relayPrivateKey = providers.generateRelaySecretKey()
+  const relayPrivateKey = Uint8Array.from(providers.generateRelaySecretKey())
   if (relayPrivateKey.length !== 32) {
     throw new Error('Relay secret-key provider returned an invalid length')
   }
@@ -77,19 +77,21 @@ export function generateStableSecrets(
   } catch {
     throw new Error('Relay secret-key provider returned an invalid scalar')
   }
+  const relayPrivateKeyHex = Buffer.from(relayPrivateKey).toString('hex')
 
   const gitHookSecret = providers.randomBytes(32)
   if (gitHookSecret.length !== 32) {
     throw new Error('Random byte provider returned an invalid length')
   }
+  const gitHookHmacSecretHex = Buffer.from(gitHookSecret).toString('hex')
 
   return {
     postgresPassword: randomAlphanumeric(32, providers.randomBytes),
     redisPassword: randomAlphanumeric(32, providers.randomBytes),
     s3AccessKey: randomAlphanumeric(24, providers.randomBytes),
     s3SecretKey: randomAlphanumeric(48, providers.randomBytes),
-    relayPrivateKeyHex: Buffer.from(relayPrivateKey).toString('hex'),
-    gitHookHmacSecretHex: Buffer.from(gitHookSecret).toString('hex'),
+    relayPrivateKeyHex,
+    gitHookHmacSecretHex,
   }
 }
 
