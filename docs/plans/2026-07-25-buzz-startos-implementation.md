@@ -1103,7 +1103,8 @@ A self-hosted workspace relay for people and AI agents
 
 The long description must say that Buzz combines Nostr-signed collaboration,
 channels, media, workflows, and Git hosting; this package runs the relay
-backend; desktop or mobile clients provide the full experience.
+backend; the desktop client provides the full experience, while mobile clients
+are still under development.
 
 Provide real translations for all five template locales. Add every user-facing
 action, task, interface, and health string introduced in later tasks to the
