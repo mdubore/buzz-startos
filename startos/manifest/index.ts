@@ -13,7 +13,7 @@ export const manifest = setupManifest({
   // 'example-volume' is an arbitrary id — name volumes whatever suits the
   // service. It must match the volumeId mounted in startos/main.ts and the
   // volume backed up in startos/backups.ts.
-  volumes: ['example-volume'],
+  volumes: ['example-volume', 'startos'],
   images: {
     // 'example-image' is an arbitrary id — it must match the imageId used in
     // startos/main.ts. TODO: replace the hello-world image with your service's
