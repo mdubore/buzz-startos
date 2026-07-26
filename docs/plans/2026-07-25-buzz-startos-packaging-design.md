@@ -80,10 +80,11 @@ Keeping this repository separate avoids collisions with Buzz's existing root
 
 ## Upstream Pinning And Versioning
 
-The first package targets an exact snapshot of upstream `main`. The discovery
-baseline was `c7089d3b52a6758596cb516f7b3e65989428d26b` on 2026-07-25, but the
-implementation will re-check upstream and pin the selected latest commit before
-building.
+The first package targets an exact snapshot of upstream `main`. The selected
+planning baseline is `8eb6e3eb601174249642373a6a367262fa476753`, committed on
+2026-07-26 UTC. The implementation will re-check `upstream/main` before the
+first code commit; if it moved, the image and runtime contract review must be
+repeated before selecting a newer commit.
 
 The package will:
 
@@ -113,11 +114,15 @@ Buzz HTTP and WebSocket interface on port 3000
             +-- PostgreSQL on 127.0.0.1:5432
             +-- Redis on 127.0.0.1:6379
             +-- MinIO on 127.0.0.1:9000
-            +-- Git repositories at /data/git
+            +-- Disposable Git scratch/cache at /data/git
 ```
 
 All subcontainers share the StartOS service network namespace. Internal URLs
 use loopback addresses rather than Docker Compose service names.
+
+PostgreSQL stores repository metadata and MinIO stores authoritative Git
+objects, manifests, and media. `/data/git` is a rebuildable local scratch and
+pack cache; it is not authoritative repository storage.
 
 ### Images
 
@@ -141,7 +146,8 @@ sideloading.
 3. Run an idempotent MinIO bucket-creation one-shot.
 4. Run an idempotent `buzz-admin migrate` one-shot.
 5. Start the Buzz relay.
-6. Mark the user-facing interface ready only after Buzz `/_readiness` succeeds.
+6. Mark the user-facing interface ready only after Buzz `/_readiness` and
+   MinIO `/minio/health/live` both succeed.
 
 `BUZZ_AUTO_MIGRATE` remains disabled when the explicit migration one-shot is
 used, preventing two migration paths from racing.
@@ -160,19 +166,27 @@ These ports stay internal:
 - 8080 Buzz health
 - 9102 Buzz metrics
 
-Buzz uses a canonical relay URL for authentication challenges, media links,
-domain handling, and CORS. Initial setup will require the owner to select one
-of the StartOS-known interface URLs. The package derives and updates these
-settings as one atomic configuration:
+Buzz uses a canonical relay URL for tenant identity, authentication challenges,
+media links, and CORS. Initial setup will require the owner to select exactly
+one StartOS-known interface URL. The package derives these settings as one
+atomic configuration:
 
 - `RELAY_URL`
 - `BUZZ_MEDIA_BASE_URL`
-- `BUZZ_MEDIA_SERVER_DOMAIN`
 - `BUZZ_CORS_ORIGINS`
 
-LAN access is available according to StartOS interface settings. Tor and public
-gateways are user-enabled StartOS capabilities and will not be described as
-automatic.
+The canonical URL is immutable in the first package version. Buzz keys a
+community by normalized host; changing only `RELAY_URL` creates a new empty
+community rather than moving the existing one. A future URL migration action
+requires an upstream-supported host rename or a separately designed,
+transactional data migration. Restores whose canonical address is no longer
+available remain blocked with a recovery task instead of silently creating a
+new tenant.
+
+The StartOS proxy must preserve the external `Host` header. Other enabled LAN,
+Tor, or gateway addresses are not aliases for the selected community and
+unknown hosts fail closed. Tor and public gateways are user-enabled StartOS
+capabilities and will not be described as automatic.
 
 ## Configuration And Secrets
 
@@ -214,7 +228,6 @@ The package exposes:
 | Action | Purpose |
 | --- | --- |
 | Complete Initial Setup | Set and validate owner identity and canonical URL |
-| Set Primary URL | Atomically update URL-derived Buzz configuration |
 | Add Member | Add a member or administrator Nostr identity |
 | Remove Member | Revoke a member or administrator identity |
 | List Members | Display the private-relay roster |
@@ -223,7 +236,8 @@ The package exposes:
 Membership actions execute upstream `buzz-admin` commands in the Buzz image.
 Inputs are validated before execution, command failures are returned without
 changing wrapper state, and secret values are never emitted in logs or action
-results.
+results. Add and remove operations are serialized because upstream roster
+events can collide when two changes use the same timestamp.
 
 ## Volumes And Ownership
 
@@ -234,12 +248,13 @@ Use separate StartOS volumes:
 | `startos` | Wrapper file models, stable secrets, owner, and primary URL |
 | `postgres` | PostgreSQL data |
 | `redis` | Redis AOF data |
-| `media` | MinIO objects and uploaded media |
-| `git` | Buzz Git repositories and pack cache |
+| `media` | MinIO media plus authoritative Git objects and manifests |
+| `git-cache` | Rebuildable Git scratch and pack cache |
 
+The `git-cache` volume improves restart performance but is safe to discard.
 Image users and mount ownership must be inspected and tested. Buzz `/data/git`
-must be writable by UID/GID 1000. PostgreSQL, Redis, and MinIO ownership must be
-derived from their pinned images and represented with StartOS idmaps or
+must be writable by UID/GID 1000. PostgreSQL, Redis, and MinIO ownership must
+be derived from their pinned images and represented with StartOS idmaps or
 initialization logic as needed.
 
 ## Backup And Restore
@@ -253,12 +268,16 @@ The backup includes:
 - `startos`
 - `redis`
 - `media`
-- `git`
+
+PostgreSQL, MinIO, and wrapper state are backup-critical. Redis AOF is retained
+for continuity but contains transient coordination, security, presence,
+rate-limit, and pub/sub state rather than authoritative events. `git-cache` is
+excluded and rebuilt from MinIO after restore.
 
 `restoreInit` remains first in the initialization sequence. Restore preserves
-all identities and credentials, revalidates the canonical URL, and creates a
-setup task if the restored URL is no longer one of the available interface
-origins.
+all identities and credentials, revalidates the immutable canonical URL, and
+creates a blocking recovery task if the restored URL is no longer one of the
+available interface origins.
 
 Buzz database schema changes remain owned by `buzz-admin migrate`. The StartOS
 version graph handles only wrapper-owned file model, configuration, or volume
@@ -274,10 +293,13 @@ Internal checks:
 - bucket initialization: successful one-shot completion
 - database migration: successful one-shot completion
 - Buzz: `/_readiness`
+- composite public health: Buzz readiness plus MinIO liveness
 
 Internal sidecar checks are not displayed as separate user-facing services.
 The user-facing health state reports whether the Buzz interface is ready, with
-specific underlying failures retained in logs and daemon status.
+specific underlying failures retained in logs and daemon status. The composite
+check includes MinIO because Buzz's own readiness endpoint checks PostgreSQL and
+Redis but not object storage.
 
 Failure behavior:
 
@@ -286,8 +308,26 @@ Failure behavior:
 - Sidecar, bucket, or migration failures block dependent daemons.
 - Secrets are not regenerated to recover from failures.
 - A failed restore or migration does not report the relay as healthy.
+- An unavailable or changed canonical URL blocks startup instead of creating a
+  second empty community.
 - Package requirements such as memory and disk are measured before being
   declared; they are not guessed.
+
+## Browser And Privacy Boundaries
+
+The first package enables the upstream invite page and may enable the limited
+repository browser after device testing. These routes require a compatible
+NIP-07 identity on a closed relay and do not provide Buzz's complete chat or
+workspace client. The upstream admin web application remains disabled because
+its deployment-wide authorization model is unsuitable for normal StartOS
+ingress.
+
+Relay membership does not make media object reads private in the selected
+upstream snapshot. Authenticated media reads remain disabled until current
+desktop and mobile clients pass compatibility testing; the README must
+explicitly describe media URLs as link-accessible. The upstream hosted iOS push
+gateway is disabled by setting `BUZZ_PUSH_GATEWAY_DELIVERY_URL` empty, keeping
+the package self-contained and making iOS push delivery unavailable.
 
 ## Upstream Update Workflow
 
@@ -327,6 +367,8 @@ For each selected upstream snapshot:
 - volumes and ownership
 - backup and restore
 - health checks
+- link-accessible media and disabled iOS push delivery
+- immutable canonical URL and unknown-host behavior
 - external dependencies, explicitly none
 - limitations and differences from upstream
 - upstream synchronization policy
@@ -351,6 +393,7 @@ upstream image. `CONTRIBUTING.md` records the package-specific workflow.
 - focused tests for:
   - Nostr identity parsing and normalization
   - canonical URL parsing and derived environment variables
+  - canonical URL immutability
   - fresh-install-only secret generation
   - action input validation
   - version and update metadata helpers, if introduced
@@ -374,9 +417,13 @@ upstream image. `CONTRIBUTING.md` records the package-specific workflow.
 - Connect an external Buzz client.
 - Add, list, and remove members.
 - Upload and retrieve media.
-- Exercise persistent Git storage.
+- Exercise Git push and clone.
+- Delete the `git-cache` contents, restart, and clone again to prove MinIO is
+  authoritative.
 - Restart and confirm all state remains.
 - Back up, remove or replace state, and restore.
+- Confirm an unknown Host is rejected and the canonical URL cannot be changed.
+- Stop MinIO and confirm the composite service health fails.
 - Confirm invalid setup, unavailable sidecars, and migration failures do not
   produce a false healthy state.
 
