@@ -94,7 +94,27 @@ test('localizes package descriptions without scaffold placeholders', () => {
   )
   assert.equal(
     manifest.description.long.en_US,
-    'Buzz combines Nostr-signed collaboration, channels, media, workflows, and Git hosting. This package runs the relay backend; desktop or mobile clients provide the full experience.',
+    'Buzz combines Nostr-signed collaboration, channels, media, workflows, and Git hosting. This package runs the relay backend. The desktop client provides the full experience; mobile clients are still under development.',
+  )
+  assert.doesNotMatch(
+    manifest.description.long.en_US,
+    /desktop or mobile clients provide the full experience/i,
+  )
+  assert.equal(
+    manifest.description.long.es_ES,
+    'Buzz combina colaboración firmada con Nostr, canales, contenido multimedia, flujos de trabajo y alojamiento Git. Este paquete ejecuta el backend del relay. El cliente de escritorio ofrece la experiencia completa; los clientes móviles aún están en desarrollo.',
+  )
+  assert.equal(
+    manifest.description.long.de_DE,
+    'Buzz vereint Nostr-signierte Zusammenarbeit, Kanäle, Medien, Workflows und Git-Hosting. Dieses Paket betreibt das Relay-Backend. Der Desktop-Client bietet das vollständige Erlebnis; die Mobil-Clients befinden sich noch in Entwicklung.',
+  )
+  assert.equal(
+    manifest.description.long.pl_PL,
+    'Buzz łączy współpracę podpisywaną w Nostr, kanały, multimedia, przepływy pracy i hosting Git. Ten pakiet uruchamia zaplecze przekaźnika. Klient komputerowy zapewnia pełne możliwości; klienty mobilne są nadal w fazie rozwoju.',
+  )
+  assert.equal(
+    manifest.description.long.fr_FR,
+    'Buzz réunit la collaboration signée avec Nostr, les canaux, les médias, les flux de travail et l’hébergement Git. Ce paquet exécute le backend du relais. Le client de bureau offre l’expérience complète ; les clients mobiles sont encore en cours de développement.',
   )
 
   for (const descriptions of [
@@ -136,7 +156,7 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Connection Information',
     'Show the canonical addresses and owner public key used by external Buzz clients.',
     'Buzz Connection Information',
-    'Use these values in the Buzz desktop or mobile client; the StartOS interface does not provide the full Buzz experience.',
+    'Use these values in the Buzz desktop client; mobile clients are still under development, and the StartOS interface does not provide the full Buzz experience.',
     'Owner Public Key (Hex)',
     'Buzz stored state requires recovery. Restore a known-good StartOS backup or reset and reinstall Buzz.',
     'Complete initial setup before starting Buzz.',
@@ -183,4 +203,37 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
       assert.doesNotMatch(value, PLACEHOLDER)
     }
   }
+
+  assert.equal(
+    translations.es_ES[19],
+    'Usa estos valores en el cliente de escritorio de Buzz; los clientes móviles aún están en desarrollo y la interfaz de StartOS no ofrece la experiencia completa de Buzz.',
+  )
+  assert.equal(
+    translations.de_DE[13],
+    'Prüfe den aus einer gültigen Sicherung wiederhergestellten Buzz-Zustand.',
+  )
+  assert.equal(
+    translations.de_DE[17],
+    'Zeigt die kanonischen Adressen und den öffentlichen Schlüssel des Eigentümers für externe Buzz-Clients.',
+  )
+  assert.equal(
+    translations.de_DE[19],
+    'Verwende diese Werte im Buzz-Desktop-Client; die Mobil-Clients befinden sich noch in Entwicklung, und die StartOS-Schnittstelle bietet nicht das vollständige Buzz-Erlebnis.',
+  )
+  assert.equal(
+    translations.de_DE[20],
+    'Öffentlicher Schlüssel des Eigentümers (Hex)',
+  )
+  assert.equal(
+    translations.pl_PL[8],
+    'Kanoniczny adres URL interfejsu webowego',
+  )
+  assert.equal(
+    translations.pl_PL[19],
+    'Użyj tych wartości w komputerowym kliencie Buzz; klienty mobilne są nadal w fazie rozwoju, a interfejs StartOS nie zapewnia pełnych możliwości Buzz.',
+  )
+  assert.equal(
+    translations.fr_FR[19],
+    'Utilisez ces valeurs dans le client Buzz de bureau ; les clients mobiles sont encore en cours de développement et l’interface StartOS ne fournit pas l’expérience Buzz complète.',
+  )
 })

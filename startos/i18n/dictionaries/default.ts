@@ -20,7 +20,7 @@ const dict = {
   'Connection Information': 16,
   'Show the canonical addresses and owner public key used by external Buzz clients.': 17,
   'Buzz Connection Information': 18,
-  'Use these values in the Buzz desktop or mobile client; the StartOS interface does not provide the full Buzz experience.': 19,
+  'Use these values in the Buzz desktop client; mobile clients are still under development, and the StartOS interface does not provide the full Buzz experience.': 19,
   'Owner Public Key (Hex)': 20,
   'Buzz stored state requires recovery. Restore a known-good StartOS backup or reset and reinstall Buzz.': 21,
   'Complete initial setup before starting Buzz.': 22,
