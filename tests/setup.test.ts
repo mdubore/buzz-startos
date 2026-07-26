@@ -30,19 +30,25 @@ test('an empty store accepts and normalizes owner identity and primary URL', () 
   })
 })
 
-test('an equivalent normalized retry is idempotent', () => {
-  const existing: StoredSetup = {
-    ownerPubkeyHex: OWNER,
-    primaryUrl: 'https://buzz.example',
+test('equivalent normalized URL retries are idempotent', () => {
+  for (const [primaryUrl, requestedUrl] of [
+    ['https://buzz.example', 'https://BUZZ.EXAMPLE.:443/'],
+    ['http://buzz.local:3000', 'http://BUZZ.LOCAL:3000/'],
+    ['https://[2001:db8::1]:8443', 'https://[2001:DB8::1]:8443/'],
+  ]) {
+    const existing: StoredSetup = {
+      ownerPubkeyHex: OWNER,
+      primaryUrl,
+    }
+
+    const result = mergeInitialSetup(existing, {
+      ownerPubkeyHex: nip19.npubEncode(OWNER),
+      primaryUrl: requestedUrl,
+    })
+
+    assert.deepEqual(result, existing)
+    assert.notStrictEqual(result, existing)
   }
-
-  const result = mergeInitialSetup(existing, {
-    ownerPubkeyHex: nip19.npubEncode(OWNER),
-    primaryUrl: 'https://BUZZ.EXAMPLE.:443/',
-  })
-
-  assert.deepEqual(result, existing)
-  assert.notStrictEqual(result, existing)
 })
 
 test('owner identity is immutable once present', () => {

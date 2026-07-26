@@ -6,8 +6,16 @@ export type PublicConfig = {
   authority: string
 }
 
+const INVALID_URL = 'Enter a valid HTTP or HTTPS canonical URL'
+
 export function derivePublicConfig(input: string): PublicConfig {
-  const parsed = new URL(input)
+  let parsed: URL
+
+  try {
+    parsed = new URL(input)
+  } catch {
+    throw new Error(INVALID_URL)
+  }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('Canonical URL must use HTTP or HTTPS')
@@ -23,7 +31,7 @@ export function derivePublicConfig(input: string): PublicConfig {
   }
 
   const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
-  if (hostname === '') {
+  if (hostname === '' || hostname.endsWith('.')) {
     throw new Error('Canonical URL must include a hostname')
   }
 

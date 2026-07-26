@@ -43,6 +43,25 @@ test('preserves brackets and a non-default port for IPv6', () => {
   })
 })
 
+test('canonical output is a fixed point for representative accepted URLs', () => {
+  for (const input of [
+    'https://Buzz.Example:443/',
+    'https://BUZZ.EXAMPLE./',
+    'http://buzz.local:3000',
+    'https://[2001:DB8::1]:8443/',
+  ]) {
+    const config = derivePublicConfig(input)
+
+    assert.deepEqual(derivePublicConfig(config.primaryUrl), config)
+  }
+})
+
+test('rejects hostnames with more than one trailing dot', () => {
+  for (const value of ['https://example.com../', 'https://../']) {
+    assert.throws(() => derivePublicConfig(value))
+  }
+})
+
 test('rejects non-root paths', () => {
   for (const value of [
     'https://buzz.example/media',
@@ -84,4 +103,20 @@ test('rejects malformed URLs', () => {
   for (const value of ['', 'buzz.example', 'not a URL']) {
     assert.throws(() => derivePublicConfig(value))
   }
+})
+
+test('sanitizes malformed URL parser errors', () => {
+  const secret = 'credential-like-sensitive-text'
+
+  assert.throws(
+    () => derivePublicConfig(`https://admin:${secret}@`),
+    (error: unknown) => {
+      assert.ok(error instanceof Error)
+      assert.equal(error.message, 'Enter a valid HTTP or HTTPS canonical URL')
+      assert.doesNotMatch(String(error), new RegExp(secret))
+      assert.equal(Object.hasOwn(error, 'input'), false)
+      assert.equal(Object.hasOwn(error, 'cause'), false)
+      return true
+    },
+  )
 })
