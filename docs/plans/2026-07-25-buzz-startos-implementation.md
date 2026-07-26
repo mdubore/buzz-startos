@@ -43,7 +43,7 @@ The planning baseline was current when this plan was written:
 The selected upstream commit is
 `dd222a509b156ba52ed3219e895d7bf1cf322c92`, committed at
 `2026-07-26T07:57:31Z`. Its relay crate version is `0.2.0`; the package ExVer
-is `0.2.0-main.20260726.t075731.dd222a5:0`.
+is `0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:0`.
 
 If Task 2 selects a newer upstream commit, replace every Buzz SHA, digest,
 timestamp, version, release note, and source link in this plan as one reviewed
@@ -1018,7 +1018,7 @@ Assert:
 - no package dependencies;
 - five image references come from `IMAGE_PINS`;
 - every image advertises only `x86_64` and `aarch64`;
-- version is `0.2.0-main.20260726.t075731.dd222a5:0`.
+- version is `0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:0`.
 
 **Step 2: Verify red**
 
@@ -1085,7 +1085,7 @@ runtime and backup policy. This keeps every intermediate commit type-correct.
 Set the current ExVer literal to:
 
 ```text
-0.2.0-main.20260726.t075731.dd222a5:0
+0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:0
 ```
 
 Use localized release notes in `en_US`, `es_ES`, `de_DE`, `pl_PL`, and
@@ -1810,7 +1810,7 @@ git commit -m "feat: back up authoritative Buzz state"
 - Create: `scripts/verify-s9pk-signer.sh`
 - Create: `CONTRIBUTING.md`
 - Create: `docs/testing/DEVICE_TEST_MATRIX.md`
-- Create: `docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md`
+- Create: `docs/releases/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0.md`
 
 **Step 1: Import pinned upstream-owned assets**
 
@@ -2392,7 +2392,7 @@ made in response to a failing gate.
 
 **Files:**
 - Modify: `docs/testing/DEVICE_TEST_MATRIX.md`
-- Modify: `docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md`
+- Modify: `docs/releases/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0.md`
 - Modify only after measurement: `startos/manifest/index.ts`
 - Modify only after measurement: localized release notes if behavior changed
 
@@ -2560,7 +2560,7 @@ Run:
 npm test
 npm run check
 git diff --check
-git add docs/testing/DEVICE_TEST_MATRIX.md docs/releases/v0.2.0-main.20260726.t075731.dd222a5_0.md startos/manifest/index.ts startos/versions/current.ts
+git add docs/testing/DEVICE_TEST_MATRIX.md docs/releases/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0.md startos/manifest/index.ts startos/versions/current.ts
 git commit -m "test: record StartOS device verification"
 ```
 
@@ -2661,9 +2661,9 @@ notes must name the untested matrix item. Never call it production-ready.
 StartOS release tags replace the ExVer colon with an underscore:
 
 ```bash
-git tag -a v0.2.0-main.20260726.t075731.dd222a5_0 \
+git tag -a v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0 \
   -m "Buzz relay main snapshot dd222a5 for StartOS"
-git push origin v0.2.0-main.20260726.t075731.dd222a5_0
+git push origin v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0
 ```
 
 Expected: `release.yml` creates a GitHub prerelease containing separate x86_64
@@ -2675,7 +2675,7 @@ Wait for the release workflow and its protected-environment approval to
 complete. Download the release assets to a directory outside the repository:
 
 ```bash
-TAG=v0.2.0-main.20260726.t075731.dd222a5_0
+TAG=v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_0
 RELEASE_DIR="$(mktemp -d)"
 printf 'Release verification directory: %s\n' "$RELEASE_DIR"
 gh release download "$TAG" \
