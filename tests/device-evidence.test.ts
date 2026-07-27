@@ -7,6 +7,7 @@ import {
   readFile,
   rm,
   symlink,
+  truncate,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -33,6 +34,30 @@ type AuthorizationCase = {
   rawDatabaseTextObserved: boolean
 }
 
+type RoleAuthorizationState = {
+  stateHash: string
+  ownerPubkeys: string[]
+  channels: Array<{
+    channelId: string
+    activeOwnerPubkeys: string[]
+  }>
+}
+
+type RoleAuthorizationCase = {
+  invariant:
+    | 'non-admin-role-change-rejected'
+    | 'owner-demotion-rejected'
+    | 'owner-set-preserved'
+    | 'active-owner-per-channel'
+  actorRole: 'owner' | 'admin' | 'member' | 'unauthorized'
+  outcome: 'rejected'
+  eventPersisted: boolean
+  clientError: string | null
+  rawDatabaseTextObserved: boolean
+  before: RoleAuthorizationState
+  after: RoleAuthorizationState
+}
+
 type RestoreEndpoint = {
   architecture: 'x86_64' | 'aarch64'
   model: string
@@ -49,6 +74,19 @@ type RestoreTrial = {
   target: RestoreEndpoint
   nativePackageReinstalled: boolean
   outcome: 'pass'
+}
+
+type MutableCandidateContract = Record<string, unknown> & {
+  startos: Record<string, unknown> & {
+    architectures: Record<string, Record<string, unknown>>
+  }
+  package: Record<string, unknown> & {
+    artifacts: Record<string, Record<string, unknown>>
+  }
+  upgradeSource: Record<string, unknown> & {
+    artifacts: Record<string, Record<string, unknown>>
+  }
+  promotionControls: Record<string, unknown>
 }
 
 type MutableEvidenceFixture = {
@@ -99,6 +137,9 @@ type MutableEvidenceFixture = {
   }
   authorizationRegression?: {
     cases: AuthorizationCase[]
+    roleAuthorization: {
+      cases: RoleAuthorizationCase[]
+    }
   }
   restoreTrials?: RestoreTrial[]
   upgradeSource?: {
@@ -240,6 +281,7 @@ const gateIds = [
 const authorizationEventKinds = [
   9030, 9031, 9032, 9033, 41010, 41011, 41012, 30620, 46020, 46030, 46031,
 ] as const
+const maxEvidenceAttachmentBytes = 16 * 1024 * 1024
 
 const repositoryFile = (path: string) => new URL(`../${path}`, import.meta.url)
 
@@ -281,6 +323,34 @@ function authorizationCases(): AuthorizationCase[] {
     }
   }
   return cases
+}
+
+function roleAuthorizationCases(): RoleAuthorizationCase[] {
+  const ownerPubkey = '1'.repeat(64)
+  const channelId = '2'.repeat(64)
+
+  return [
+    ['non-admin-role-change-rejected', 'member', 'a'],
+    ['owner-demotion-rejected', 'admin', 'b'],
+    ['owner-set-preserved', 'admin', 'c'],
+    ['active-owner-per-channel', 'admin', 'd'],
+  ].map(([invariant, actorRole, hashCharacter]) => {
+    const state = {
+      stateHash: `sha256:${hashCharacter.repeat(64)}`,
+      ownerPubkeys: [ownerPubkey],
+      channels: [{ channelId, activeOwnerPubkeys: [ownerPubkey] }],
+    }
+    return {
+      invariant: invariant as RoleAuthorizationCase['invariant'],
+      actorRole: actorRole as RoleAuthorizationCase['actorRole'],
+      outcome: 'rejected' as const,
+      eventPersisted: false,
+      clientError: 'request rejected',
+      rawDatabaseTextObserved: false,
+      before: structuredClone(state),
+      after: structuredClone(state),
+    }
+  })
 }
 
 function restoreEndpoint(
@@ -441,6 +511,92 @@ test('rejects a manually asserted authenticated-review enforcement flag', async 
   )
 })
 
+for (const [label, addUnknownField] of [
+  [
+    'top level',
+    (candidate: MutableCandidateContract) => {
+      candidate.unexpected = true
+    },
+  ],
+  [
+    'StartOS identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.unexpected = true
+    },
+  ],
+  [
+    'StartOS architecture map',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.unexpected = {}
+    },
+  ],
+  [
+    'StartOS architecture identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.x86_64.unexpected = true
+    },
+  ],
+  [
+    'package identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.unexpected = true
+    },
+  ],
+  [
+    'package artifact map',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.unexpected = {}
+    },
+  ],
+  [
+    'package artifact identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.x86_64.unexpected = true
+    },
+  ],
+  [
+    'upgrade-source identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.upgradeSource.unexpected = true
+    },
+  ],
+  [
+    'upgrade-source artifact map',
+    (candidate: MutableCandidateContract) => {
+      candidate.upgradeSource.artifacts.unexpected = {}
+    },
+  ],
+  [
+    'upgrade-source artifact identity',
+    (candidate: MutableCandidateContract) => {
+      candidate.upgradeSource.artifacts.aarch64.unexpected = true
+    },
+  ],
+  [
+    'promotion controls',
+    (candidate: MutableCandidateContract) => {
+      candidate.promotionControls.unexpected = true
+    },
+  ],
+] as const) {
+  test(`rejects an unknown field in the candidate ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-candidate-shape-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const candidate = JSON.parse(
+      await readFile(frozenCandidatePath, 'utf8'),
+    ) as MutableCandidateContract
+    addUnknownField(candidate)
+    const attemptedContract = join(directory, 'candidate.json')
+    await writeFile(attemptedContract, JSON.stringify(candidate))
+
+    await assert.rejects(
+      () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+      /contains unknown field/,
+    )
+  })
+}
+
 test('defines the complete acyclic 46-cell production gate catalog', async () => {
   const validator = await loadValidator()
   const catalog = await validator.loadGateCatalog(catalogPath)
@@ -556,6 +712,70 @@ test('rejects attachment symlinks that escape the evidence directory', async (t)
   assert.ok(
     result.errors.some((error) =>
       error.includes('escapes its evidence directory'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+test('rejects attachment symlinks even when their target stays in the evidence directory', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-local-symlink-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const contents = 'sanitized fixture output\n'
+  await writeFile(join(directory, 'target.txt'), contents)
+  await symlink('target.txt', join(directory, 'captured.txt'))
+
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.evidence[0].path = 'captured.txt'
+  record.evidence[0].sha256 = sha256(contents)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('must not use symbolic links'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+test('rejects retained attachments over the production size limit', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-oversize-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const attachmentPath = join(directory, 'captured.txt')
+  await writeFile(attachmentPath, '')
+  await truncate(attachmentPath, maxEvidenceAttachmentBytes + 1)
+
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.evidence[0].path = 'captured.txt'
+  record.evidence[0].sha256 = '0'.repeat(64)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes(
+        `exceeds the ${maxEvidenceAttachmentBytes}-byte production limit`,
+      ),
     ),
     result.errors.join('\n'),
   )
@@ -788,7 +1008,12 @@ test('accepts the exhaustive AUTH-02 authorization regression structure', async 
   ) as MutableEvidenceFixture
   record.gateId = gate.id
   requirePassingAssertions(record, gate.requiredAssertions)
-  record.authorizationRegression = { cases: authorizationCases() }
+  const cases = authorizationCases()
+  assert.equal(cases.length, 99)
+  record.authorizationRegression = {
+    cases,
+    roleAuthorization: { cases: roleAuthorizationCases() },
+  }
   await retainFixtureAttachment(directory)
   const recordPath = join(directory, 'record.json')
   await writeFile(recordPath, JSON.stringify(record))
@@ -882,7 +1107,97 @@ for (const [label, mutate, expectedError] of [
     requirePassingAssertions(record, gate.requiredAssertions)
     const cases = authorizationCases()
     mutate(cases)
-    record.authorizationRegression = { cases }
+    record.authorizationRegression = {
+      cases,
+      roleAuthorization: { cases: roleAuthorizationCases() },
+    }
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) => error.includes(expectedError)),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+for (const [label, mutate, expectedError] of [
+  [
+    'a required structured role invariant is missing',
+    (cases: RoleAuthorizationCase[]) => {
+      cases.pop()
+    },
+    'roleAuthorization must cover exactly',
+  ],
+  [
+    'a rejected role change persists an event',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[0].eventPersisted = true
+    },
+    'role authorization rejections must not persist writes',
+  ],
+  [
+    'a role rejection exposes an unstable client error',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[1].clientError = 'duplicate key violates users_pkey'
+    },
+    'role authorization rejections require the stable generic error',
+  ],
+  [
+    'a role rejection exposes raw database text',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[2].rawDatabaseTextObserved = true
+    },
+    'role authorization checks must not expose raw database or SQL text',
+  ],
+  [
+    'persisted state changes after a rejected role operation',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[0].after.stateHash = `sha256:${'e'.repeat(64)}`
+    },
+    'role authorization before/after state hashes must match',
+  ],
+  [
+    'the owner set changes after a rejected role operation',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[2].after.ownerPubkeys = ['3'.repeat(64)]
+    },
+    'role authorization must preserve the owner set',
+  ],
+  [
+    'a channel has no active owner after a rejected role operation',
+    (cases: RoleAuthorizationCase[]) => {
+      cases[3].after.channels[0].activeOwnerPubkeys = []
+    },
+    'every channel requires at least one active owner',
+  ],
+] as const) {
+  test(`rejects AUTH-02 when ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const catalog = await validator.loadGateCatalog(catalogPath)
+    const gate = catalog.gates.find(({ id }) => id === 'AUTH-02')
+    assert.ok(gate)
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-role-bad-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.gateId = gate.id
+    requirePassingAssertions(record, gate.requiredAssertions)
+    const roleCases = roleAuthorizationCases()
+    mutate(roleCases)
+    record.authorizationRegression = {
+      cases: authorizationCases(),
+      roleAuthorization: { cases: roleCases },
+    }
     await retainFixtureAttachment(directory)
     const recordPath = join(directory, 'record.json')
     await writeFile(recordPath, JSON.stringify(record))
@@ -1262,6 +1577,67 @@ test('rejects a matrix-linked inherited evidence record', async (t) => {
   )
 })
 
+for (const matrixLinkKind of [
+  'file URL',
+  'absolute path',
+  'path traversal',
+  'escaping symlink',
+] as const) {
+  test(`rejects a matrix evidence ${matrixLinkKind}`, async (t) => {
+    const validator = await loadValidator()
+    const root = await mkdtemp(join(tmpdir(), 'buzz-device-matrix-path-'))
+    t.after(() => rm(root, { recursive: true, force: true }))
+    const matrixDirectory = join(root, 'matrix')
+    await mkdir(matrixDirectory)
+    await retainFixtureAttachment(root)
+    const outsideRecord = join(root, 'outside.json')
+    await writeFile(
+      outsideRecord,
+      await readFile(fixture('valid-artifact.json')),
+    )
+
+    let matrixLink: string
+    if (matrixLinkKind === 'file URL') {
+      matrixLink = pathToFileURL(outsideRecord).href
+    } else if (matrixLinkKind === 'absolute path') {
+      matrixLink = outsideRecord
+    } else if (matrixLinkKind === 'path traversal') {
+      matrixLink = '../outside.json'
+    } else {
+      matrixLink = 'linked.json'
+      await symlink('../outside.json', join(matrixDirectory, matrixLink))
+    }
+
+    const temporaryMatrix = join(matrixDirectory, 'DEVICE_TEST_MATRIX.md')
+    await writeFile(
+      temporaryMatrix,
+      matrixFixture({
+        'ART-01': { x86_64: `[PASS](${matrixLink})` },
+      }),
+    )
+
+    const result = await validator.validateRepository({
+      candidatePath: frozenCandidatePath,
+      catalogPath,
+      examplePath,
+      matrixPath: pathToFileURL(temporaryMatrix),
+      schemaPath,
+    })
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some(
+        (error) =>
+          error.includes('matrix evidence') &&
+          (error.includes('local relative path') ||
+            error.includes('escapes its matrix directory') ||
+            error.includes('must not use symbolic links')),
+      ),
+      result.errors.join('\n'),
+    )
+  })
+}
+
 test('rejects linked records from different release candidates', async (t) => {
   const validator = await loadValidator()
   const directory = await mkdtemp(join(tmpdir(), 'buzz-device-evidence-'))
@@ -1424,7 +1800,10 @@ test('promotion still fails closed after 46 PASS records without authenticated b
       }
       requirePassingAssertions(record, gate.requiredAssertions)
       if (gate.id === 'AUTH-02') {
-        record.authorizationRegression = { cases: authorizationCases() }
+        record.authorizationRegression = {
+          cases: authorizationCases(),
+          roleAuthorization: { cases: roleAuthorizationCases() },
+        }
       }
       if (gate.id === 'BKP-01') {
         record.restoreTrials = completeRestoreTrials()
@@ -1514,6 +1893,10 @@ test('documents the ordered stable StartOS production run', async () => {
   assert.match(runbook, /no\s+(?:event\s+)?write/i)
   assert.match(runbook, /request rejected/)
   assert.match(runbook, /raw (?:database|DB).*SQL/i)
+  assert.match(runbook, /authorizationRegression\.roleAuthorization/)
+  assert.match(runbook, /before.*after.*persisted state/i)
+  assert.match(runbook, /16 MiB/)
+  assert.match(runbook, /symbolic links.*rejected/i)
   assert.match(runbook, /x86_64.*aarch64/)
   assert.match(runbook, /aarch64.*x86_64/)
   assert.match(runbook, /projects\/start-os\/docs\/src\/backup-restore\.md/)
@@ -1663,6 +2046,8 @@ test('keeps contributor and operator documentation aligned with open gates', asy
   assert.match(readme, /npm run verify:device-promotion/)
   assert.match(readme, /DEVICE_CANDIDATE\.json/)
   assert.match(readme, /attachments.*local.*SHA-256/i)
+  assert.match(readme, /16 MiB/)
+  assert.match(readme, /symbolic links.*rejected/i)
   assert.match(
     readme,
     /All 46 StartOS device-matrix cells remain \*\*NOT RUN\*\*/,

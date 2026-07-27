@@ -47,7 +47,8 @@ upstream commit, signer fingerprint, SDK version, native archive names, byte
 sizes, and SHA-256 hashes in `DEVICE_CANDIDATE.json`, then change its state to
 `FROZEN`. Both architectures must use those exact values. Do not invent an
 identity to exercise the release workflow; automated tests use a separate
-injected frozen fixture.
+injected frozen fixture. The candidate contract is closed: unknown fields at
+any level are rejected rather than ignored.
 
 The candidate tag and release assets are immutable. Evidence may be committed
 after the candidate tag, but the tested tag must not move and its assets must not
@@ -63,10 +64,14 @@ matrix.
    device, execution, state-hash, assertion, evidence, issue, and review data.
 3. Store sanitized attachments beside the record and reference them only by a
    local relative `path`, never by a URL or absolute path. Hash every attachment
-   and reference it by a unique evidence ID. The validator resolves symlinks,
-   confines each file to the record directory, opens it, recomputes SHA-256, and
-   scans retained content for credentials. Record commands as program and
-   argument arrays only when no password, secret, or token argument is present.
+   and reference it by a unique evidence ID. Attachments are limited to 16 MiB,
+   and symbolic links are rejected. The validator confines each file to the
+   record directory, opens it with no-follow semantics, and streams SHA-256
+   verification and credential scanning through the same file handle while
+   checking for changes. Matrix record links must likewise be local relative
+   paths to regular, non-symbolic files within the matrix directory. Record
+   commands as program and argument arrays only when no password, secret, or
+   token argument is present.
 4. Use `pass` only when every required assertion in
    [`DEVICE_GATES.json`](DEVICE_GATES.json) passes, each assertion cites retained
    evidence, no high or critical issue is open, and the independent reviewer
@@ -143,8 +148,17 @@ rejected. Confirm StartOS actions never return service secrets.
 ### AUTH-02
 
 Create a synthetic channel with an active owner, admin, member, and unauthorized
-identity. Preserve the non-admin role-change, owner-demotion, owner-set, and
-active-owner checks, then fill the structured `authorizationRegression.cases`
+identity. Fill `authorizationRegression.roleAuthorization.cases` with exactly
+the four named invariants: `non-admin-role-change-rejected`,
+`owner-demotion-rejected`, `owner-set-preserved`, and
+`active-owner-per-channel`. Every attempt must be rejected without persisting an
+event, return the generic client error `request rejected`, and expose no raw
+database or SQL text. Record before and after persisted state hashes, owner
+public-key sets, and the active owner public keys for every channel. The before
+and after state must be identical, the owner set must be preserved, and every
+channel must retain at least one active owner.
+
+Separately, fill the structured `authorizationRegression.cases` restriction
 matrix for event kinds `9030`, `9031`, `9032`, `9033`, `41010`, `41011`,
 `41012`, `30620`, `46020`, `46030`, and `46031`.
 

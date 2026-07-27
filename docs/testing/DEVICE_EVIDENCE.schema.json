@@ -220,6 +220,10 @@
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
+    "publicKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "releaseCandidate": {
       "type": "object",
       "additionalProperties": false,
@@ -572,10 +576,114 @@
         }
       }
     },
-    "authorizationRegression": {
+    "channelOwnerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channelId", "activeOwnerPubkeys"],
+      "properties": {
+        "channelId": {
+          "$ref": "#/$defs/publicKey"
+        },
+        "activeOwnerPubkeys": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/publicKey"
+          }
+        }
+      }
+    },
+    "roleAuthorizationState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stateHash", "ownerPubkeys", "channels"],
+      "properties": {
+        "stateHash": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "ownerPubkeys": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/publicKey"
+          }
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/channelOwnerState"
+          }
+        }
+      }
+    },
+    "roleAuthorizationCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invariant",
+        "actorRole",
+        "outcome",
+        "eventPersisted",
+        "clientError",
+        "rawDatabaseTextObserved",
+        "before",
+        "after"
+      ],
+      "properties": {
+        "invariant": {
+          "enum": [
+            "non-admin-role-change-rejected",
+            "owner-demotion-rejected",
+            "owner-set-preserved",
+            "active-owner-per-channel"
+          ]
+        },
+        "actorRole": {
+          "enum": ["owner", "admin", "member", "unauthorized"]
+        },
+        "outcome": {
+          "const": "rejected"
+        },
+        "eventPersisted": {
+          "const": false
+        },
+        "clientError": {
+          "const": "request rejected"
+        },
+        "rawDatabaseTextObserved": {
+          "const": false
+        },
+        "before": {
+          "$ref": "#/$defs/roleAuthorizationState"
+        },
+        "after": {
+          "$ref": "#/$defs/roleAuthorizationState"
+        }
+      }
+    },
+    "roleAuthorization": {
       "type": "object",
       "additionalProperties": false,
       "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/roleAuthorizationCase"
+          }
+        }
+      }
+    },
+    "authorizationRegression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases", "roleAuthorization"],
       "properties": {
         "cases": {
           "type": "array",
@@ -584,6 +692,9 @@
           "items": {
             "$ref": "#/$defs/authorizationCase"
           }
+        },
+        "roleAuthorization": {
+          "$ref": "#/$defs/roleAuthorization"
         }
       }
     },

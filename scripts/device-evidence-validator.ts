@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import { lstat, open, readFile, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { StringDecoder } from 'node:string_decoder'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import Ajv2020, { type AnySchema, type ErrorObject } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
@@ -22,6 +24,9 @@ const DEFAULT_CANDIDATE = new URL(
 const OFFICIAL_STARTOS_SOURCE =
   'https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0'
 const OFFICIAL_STARTOS_COMMIT = '514af0c2fa076c8b597d9861f882bdb1b3411d9e'
+const MAX_EVIDENCE_ATTACHMENT_BYTES = 16 * 1024 * 1024
+const ATTACHMENT_READ_BUFFER_BYTES = 64 * 1024
+const SENSITIVE_SCAN_OVERLAP = 4 * 1024
 
 const FORBIDDEN_SENSITIVE_VALUES = [
   /\bnsec1[023456789acdefghjklmnpqrstuvwxyz]+\b/i,
@@ -38,6 +43,12 @@ const FORBIDDEN_SENSITIVE_VALUES = [
 
 const AUTHORIZATION_EVENT_KINDS = [
   9030, 9031, 9032, 9033, 41010, 41011, 41012, 30620, 46020, 46030, 46031,
+] as const
+const ROLE_AUTHORIZATION_INVARIANTS = [
+  'non-admin-role-change-rejected',
+  'owner-demotion-rejected',
+  'owner-set-preserved',
+  'active-owner-per-channel',
 ] as const
 
 type Architecture = keyof typeof ARCHIVES
@@ -286,6 +297,207 @@ function pathIsContained(base: string, target: string): boolean {
   )
 }
 
+type LocalFileResolution =
+  | {
+      path: string
+      device: number | bigint
+      inode: number | bigint
+      error?: never
+    }
+  | { path?: never; error: string }
+
+async function resolveLocalRegularFile(
+  baseDirectory: string,
+  localPath: unknown,
+  label: string,
+  directoryLabel: string,
+): Promise<LocalFileResolution> {
+  if (
+    typeof localPath !== 'string' ||
+    localPath.length === 0 ||
+    isAbsolute(localPath) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/.test(localPath) ||
+    localPath.includes('\\') ||
+    localPath.includes('?') ||
+    localPath.includes('#') ||
+    localPath.includes('\0')
+  ) {
+    return { error: `${label} must use a local relative path` }
+  }
+
+  const segments = localPath.split('/')
+  if (segments.includes('..')) {
+    return { error: `${label} escapes its ${directoryLabel}` }
+  }
+
+  let realBaseDirectory
+  try {
+    realBaseDirectory = await realpath(baseDirectory)
+  } catch {
+    return { error: `${label} cannot be opened` }
+  }
+  const resolvedPath = resolve(realBaseDirectory, localPath)
+  if (!pathIsContained(realBaseDirectory, resolvedPath)) {
+    return { error: `${label} escapes its ${directoryLabel}` }
+  }
+
+  let cursor = realBaseDirectory
+  let finalEntry: Awaited<ReturnType<typeof lstat>> | undefined
+  for (const segment of segments.filter(
+    (pathSegment) => pathSegment !== '' && pathSegment !== '.',
+  )) {
+    cursor = resolve(cursor, segment)
+    let entry
+    try {
+      entry = await lstat(cursor)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      return {
+        error:
+          code === 'ENOENT'
+            ? `${label} does not exist`
+            : `${label} cannot be opened`,
+      }
+    }
+    finalEntry = entry
+    if (entry.isSymbolicLink()) {
+      try {
+        const realLinkTarget = await realpath(cursor)
+        if (!pathIsContained(realBaseDirectory, realLinkTarget)) {
+          return { error: `${label} escapes its ${directoryLabel}` }
+        }
+      } catch {
+        return { error: `${label} cannot be opened` }
+      }
+      return { error: `${label} must not use symbolic links` }
+    }
+  }
+
+  if (finalEntry === undefined) {
+    try {
+      finalEntry = await lstat(resolvedPath)
+    } catch {
+      return { error: `${label} cannot be opened` }
+    }
+  }
+  if (!finalEntry.isFile()) {
+    return { error: `${label} is not a regular file` }
+  }
+
+  let realFilePath
+  try {
+    realFilePath = await realpath(resolvedPath)
+  } catch {
+    return { error: `${label} cannot be opened` }
+  }
+  if (!pathIsContained(realBaseDirectory, realFilePath)) {
+    return { error: `${label} escapes its ${directoryLabel}` }
+  }
+  return {
+    path: realFilePath,
+    device: finalEntry.dev,
+    inode: finalEntry.ino,
+  }
+}
+
+async function inspectAttachment(
+  attachmentPath: string,
+  label: string,
+  expectedIdentity: { device: number | bigint; inode: number | bigint },
+): Promise<
+  | {
+      sha256: string
+      containsSensitiveValue: boolean
+      error?: never
+    }
+  | { error: string }
+> {
+  let handle
+  try {
+    handle = await open(
+      attachmentPath,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+    )
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    return {
+      error:
+        code === 'ELOOP'
+          ? `${label} must not use symbolic links`
+          : `${label} cannot be opened`,
+    }
+  }
+
+  try {
+    const before = await handle.stat()
+    if (
+      before.dev !== expectedIdentity.device ||
+      before.ino !== expectedIdentity.inode
+    ) {
+      return { error: `${label} changed before validation` }
+    }
+    if (!before.isFile()) {
+      return { error: `${label} is not a regular file` }
+    }
+    if (before.size > MAX_EVIDENCE_ATTACHMENT_BYTES) {
+      return {
+        error: `${label} exceeds the ${MAX_EVIDENCE_ATTACHMENT_BYTES}-byte production limit`,
+      }
+    }
+
+    const hash = createHash('sha256')
+    const decoder = new StringDecoder('utf8')
+    const buffer = Buffer.allocUnsafe(ATTACHMENT_READ_BUFFER_BYTES)
+    let bytesReadTotal = 0
+    let scanTail = ''
+    let foundSensitiveValue = false
+
+    while (true) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        0,
+        buffer.length,
+        bytesReadTotal,
+      )
+      if (bytesRead === 0) break
+      bytesReadTotal += bytesRead
+      if (bytesReadTotal > MAX_EVIDENCE_ATTACHMENT_BYTES) {
+        return {
+          error: `${label} exceeds the ${MAX_EVIDENCE_ATTACHMENT_BYTES}-byte production limit`,
+        }
+      }
+
+      const chunk = buffer.subarray(0, bytesRead)
+      hash.update(chunk)
+      const scanWindow = scanTail + decoder.write(chunk)
+      foundSensitiveValue ||= containsSensitiveValue(scanWindow)
+      scanTail = scanWindow.slice(-SENSITIVE_SCAN_OVERLAP)
+    }
+
+    const finalScanWindow = scanTail + decoder.end()
+    foundSensitiveValue ||= containsSensitiveValue(finalScanWindow)
+
+    const after = await handle.stat()
+    if (
+      before.dev !== after.dev ||
+      before.ino !== after.ino ||
+      before.size !== after.size ||
+      before.mtimeMs !== after.mtimeMs ||
+      before.ctimeMs !== after.ctimeMs ||
+      bytesReadTotal !== after.size
+    ) {
+      return { error: `${label} changed during validation` }
+    }
+
+    return {
+      sha256: hash.digest('hex'),
+      containsSensitiveValue: foundSensitiveValue,
+    }
+  } finally {
+    await handle.close()
+  }
+}
+
 async function attachmentErrors(
   document: unknown,
   evidencePath: URL,
@@ -296,70 +508,35 @@ async function attachmentErrors(
     : []
   const errors: string[] = []
   const evidenceDirectory = dirname(fileURLToPath(evidencePath))
-  const realEvidenceDirectory = await realpath(evidenceDirectory)
 
   for (const [index, attachment] of attachments.entries()) {
     const label =
       typeof attachment.id === 'string'
         ? `evidence ${attachment.id}`
         : `evidence attachment ${index}`
-    const attachmentPath = attachment.path
-    if (
-      typeof attachmentPath !== 'string' ||
-      attachmentPath.length === 0 ||
-      isAbsolute(attachmentPath) ||
-      /^[A-Za-z][A-Za-z0-9+.-]*:/.test(attachmentPath) ||
-      attachmentPath.includes('\\') ||
-      attachmentPath.includes('?') ||
-      attachmentPath.includes('#') ||
-      attachmentPath.includes('\0')
-    ) {
-      errors.push(`${label} must use a local relative path`)
+    const resolved = await resolveLocalRegularFile(
+      evidenceDirectory,
+      attachment.path,
+      label,
+      'evidence directory',
+    )
+    if (resolved.error !== undefined) {
+      errors.push(resolved.error)
       continue
     }
 
-    const segments = attachmentPath.split('/')
-    if (segments.includes('..')) {
-      errors.push(`${label} escapes its evidence directory`)
+    const inspected = await inspectAttachment(resolved.path, label, {
+      device: resolved.device,
+      inode: resolved.inode,
+    })
+    if (inspected.error !== undefined) {
+      errors.push(inspected.error)
       continue
     }
-
-    const resolvedPath = resolve(evidenceDirectory, attachmentPath)
-    if (!pathIsContained(evidenceDirectory, resolvedPath)) {
-      errors.push(`${label} escapes its evidence directory`)
-      continue
-    }
-
-    let realAttachmentPath: string
-    try {
-      realAttachmentPath = await realpath(resolvedPath)
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      errors.push(
-        code === 'ENOENT'
-          ? `${label} does not exist`
-          : `${label} cannot be opened`,
-      )
-      continue
-    }
-
-    if (!pathIsContained(realEvidenceDirectory, realAttachmentPath)) {
-      errors.push(`${label} escapes its evidence directory`)
-      continue
-    }
-
-    const attachmentStat = await stat(realAttachmentPath)
-    if (!attachmentStat.isFile()) {
-      errors.push(`${label} is not a regular file`)
-      continue
-    }
-
-    const contents = await readFile(realAttachmentPath)
-    const observedSha256 = createHash('sha256').update(contents).digest('hex')
-    if (attachment.sha256 !== observedSha256) {
+    if (attachment.sha256 !== inspected.sha256) {
       errors.push(`${label} SHA-256 mismatch`)
     }
-    if (containsSensitiveValue(contents.toString('utf8'))) {
+    if (inspected.containsSensitiveValue) {
       errors.push(`${label} attachment contains a forbidden sensitive value`)
     }
   }
@@ -440,6 +617,17 @@ export async function loadGateCatalog(path: URL): Promise<GateCatalog> {
   return catalog
 }
 
+function unknownFieldErrors(
+  value: Record<string, unknown>,
+  allowedFields: readonly string[],
+  label: string,
+): string[] {
+  const allowed = new Set(allowedFields)
+  return Object.keys(value)
+    .filter((field) => !allowed.has(field))
+    .map((field) => `${label} contains unknown field ${field}`)
+}
+
 function candidateContractErrors(value: unknown): string[] {
   if (!isRecord(value)) return ['candidate contract must be an object']
 
@@ -459,6 +647,78 @@ function candidateContractErrors(value: unknown): string[] {
   const promotionControls = isRecord(value.promotionControls)
     ? value.promotionControls
     : {}
+
+  errors.push(
+    ...unknownFieldErrors(
+      value,
+      [
+        'schemaVersion',
+        'state',
+        'startos',
+        'package',
+        'upgradeSource',
+        'promotionControls',
+      ],
+      'candidate contract',
+    ),
+    ...unknownFieldErrors(
+      startos,
+      [
+        'releaseLine',
+        'releaseTag',
+        'sourceUrl',
+        'sourceCommit',
+        'architectures',
+      ],
+      'candidate StartOS identity',
+    ),
+    ...unknownFieldErrors(
+      architectures,
+      ['x86_64', 'aarch64'],
+      'candidate StartOS architecture map',
+    ),
+    ...unknownFieldErrors(
+      packageIdentity,
+      [
+        'tag',
+        'version',
+        'packageCommit',
+        'upstreamCommit',
+        'signerFingerprint',
+        'manifestMinimumStartos',
+        'sdkVersion',
+        'artifacts',
+      ],
+      'candidate package identity',
+    ),
+    ...unknownFieldErrors(
+      artifacts,
+      ['x86_64', 'aarch64'],
+      'candidate package artifact map',
+    ),
+    ...unknownFieldErrors(
+      upgradeSource,
+      [
+        'tag',
+        'version',
+        'packageCommit',
+        'upstreamCommit',
+        'signerFingerprint',
+        'artifacts',
+      ],
+      'candidate upgrade-source identity',
+    ),
+    ...unknownFieldErrors(
+      upgradeArtifacts,
+      ['x86_64', 'aarch64'],
+      'candidate upgrade-source artifact map',
+    ),
+    ...unknownFieldErrors(
+      promotionControls,
+      ['authenticatedOperatorReviewerBinding'],
+      'candidate promotion controls',
+    ),
+  )
 
   if (value.schemaVersion !== 1)
     errors.push('candidate schemaVersion must be 1')
@@ -484,6 +744,24 @@ function candidateContractErrors(value: unknown): string[] {
     const upgradeArtifact = isRecord(upgradeArtifacts[architecture])
       ? upgradeArtifacts[architecture]
       : {}
+
+    errors.push(
+      ...unknownFieldErrors(
+        startosIdentity,
+        ['buildId', 'imageSha256'],
+        `candidate StartOS ${architecture} identity`,
+      ),
+      ...unknownFieldErrors(
+        artifact,
+        ['name', 'sha256', 'sizeBytes'],
+        `candidate ${architecture} artifact identity`,
+      ),
+      ...unknownFieldErrors(
+        upgradeArtifact,
+        ['name', 'sha256'],
+        `candidate upgrade-source ${architecture} artifact identity`,
+      ),
+    )
 
     if (
       startosIdentity.buildId !== null &&
@@ -637,6 +915,125 @@ async function schemaErrors(
   return (validate.errors ?? []).map(formatSchemaError)
 }
 
+function normalizedStringSet(value: unknown): string[] | null {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item): item is string => typeof item === 'string')
+  ) {
+    return null
+  }
+  return [...new Set(value)].sort()
+}
+
+function normalizedChannelOwners(
+  value: unknown,
+  errors: string[],
+): string | null {
+  if (!Array.isArray(value)) return null
+  const channels = new Map<string, string[]>()
+  for (const channel of value) {
+    if (!isRecord(channel) || typeof channel.channelId !== 'string') return null
+    const activeOwners = normalizedStringSet(channel.activeOwnerPubkeys)
+    if (activeOwners === null) return null
+    if (activeOwners.length === 0) {
+      errors.push('every channel requires at least one active owner')
+    }
+    if (channels.has(channel.channelId)) {
+      errors.push('role authorization channel identities must be unique')
+    }
+    channels.set(channel.channelId, activeOwners)
+  }
+  if (channels.size === 0) {
+    errors.push('every channel requires at least one active owner')
+  }
+  return JSON.stringify(
+    [...channels.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  )
+}
+
+function roleAuthorizationErrors(
+  regression: Record<string, unknown>,
+): string[] {
+  const roleAuthorization = isRecord(regression.roleAuthorization)
+    ? regression.roleAuthorization
+    : null
+  if (roleAuthorization === null || !Array.isArray(roleAuthorization.cases)) {
+    return ['AUTH-02 requires structured roleAuthorization evidence']
+  }
+
+  const errors: string[] = []
+  const observedInvariants = new Set<string>()
+  for (const roleCase of roleAuthorization.cases.filter(isRecord)) {
+    observedInvariants.add(String(roleCase.invariant))
+    if (roleCase.outcome !== 'rejected') {
+      errors.push('role authorization cases must reject unauthorized changes')
+    }
+    if (roleCase.eventPersisted !== false) {
+      errors.push('role authorization rejections must not persist writes')
+    }
+    if (roleCase.clientError !== 'request rejected') {
+      errors.push(
+        'role authorization rejections require the stable generic error',
+      )
+    }
+    if (roleCase.rawDatabaseTextObserved !== false) {
+      errors.push(
+        'role authorization checks must not expose raw database or SQL text',
+      )
+    }
+    if (
+      roleCase.invariant === 'non-admin-role-change-rejected' &&
+      roleCase.actorRole !== 'member' &&
+      roleCase.actorRole !== 'unauthorized'
+    ) {
+      errors.push(
+        'non-admin role-change evidence requires a member or unauthorized actor',
+      )
+    }
+
+    const before = isRecord(roleCase.before) ? roleCase.before : {}
+    const after = isRecord(roleCase.after) ? roleCase.after : {}
+    if (before.stateHash !== after.stateHash) {
+      errors.push('role authorization before/after state hashes must match')
+    }
+
+    const beforeOwners = normalizedStringSet(before.ownerPubkeys)
+    const afterOwners = normalizedStringSet(after.ownerPubkeys)
+    if (
+      beforeOwners === null ||
+      afterOwners === null ||
+      JSON.stringify(beforeOwners) !== JSON.stringify(afterOwners)
+    ) {
+      errors.push('role authorization must preserve the owner set')
+    }
+
+    const beforeChannels = normalizedChannelOwners(before.channels, errors)
+    const afterChannels = normalizedChannelOwners(after.channels, errors)
+    if (
+      beforeChannels === null ||
+      afterChannels === null ||
+      beforeChannels !== afterChannels
+    ) {
+      errors.push('role authorization must preserve active owners per channel')
+    }
+  }
+
+  if (
+    roleAuthorization.cases.length !== ROLE_AUTHORIZATION_INVARIANTS.length ||
+    observedInvariants.size !== ROLE_AUTHORIZATION_INVARIANTS.length ||
+    ROLE_AUTHORIZATION_INVARIANTS.some(
+      (invariant) => !observedInvariants.has(invariant),
+    )
+  ) {
+    errors.push(
+      'roleAuthorization must cover exactly the four required role invariants',
+    )
+  }
+  return errors
+}
+
 function authorizationRegressionErrors(
   document: Record<string, unknown>,
   gateId: string,
@@ -653,7 +1050,7 @@ function authorizationRegressionErrors(
     return ['AUTH-02 requires authorizationRegression']
   }
 
-  const errors: string[] = []
+  const errors = roleAuthorizationErrors(regression)
   const expected = new Set<string>()
   for (const role of ['owner', 'admin', 'member']) {
     for (const state of ['active-ban', 'active-timeout']) {
@@ -1289,7 +1686,17 @@ export async function validateRepository(options: {
       }
       if (cell.status === 'NOT RUN' || cell.path === undefined) continue
 
-      const evidencePath = new URL(cell.path, options.matrixPath)
+      const matrixEvidence = await resolveLocalRegularFile(
+        dirname(fileURLToPath(options.matrixPath)),
+        cell.path,
+        `${gate.id}/${architecture} matrix evidence`,
+        'matrix directory',
+      )
+      if (matrixEvidence.error !== undefined) {
+        errors.push(matrixEvidence.error)
+        continue
+      }
+      const evidencePath = pathToFileURL(matrixEvidence.path)
       const evidenceResult = await validateEvidenceFile(
         evidencePath,
         options.schemaPath,

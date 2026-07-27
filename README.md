@@ -25,10 +25,12 @@ the template and linked records during execution; the release-only
 identity and exactly 46 linked passing cells.
 
 Production evidence is self-contained. Attachments are local and SHA-256
-verified: validation opens each file, enforces directory containment (including
-resolved symlinks), and scans retained content and command arguments for
-credentials. External evidence URLs and inherited production records do not
-satisfy a matrix cell.
+verified regular files limited to 16 MiB, and symbolic links are rejected.
+Validation opens each file with no-follow semantics, then streams both SHA-256
+verification and credential scanning through the same handle while checking
+that the file did not change. Matrix record links follow the same local-relative
+containment rules. External evidence URLs and inherited production records do
+not satisfy a matrix cell.
 
 Strict promotion is intentionally disabled even after 46 passing records until a
 protected evidence workflow provides machine-verifiable authenticated
