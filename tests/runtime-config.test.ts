@@ -56,6 +56,7 @@ const EXPECTED_CONFIG = {
     POSTGRES_DB: 'buzz',
     POSTGRES_USER: 'buzz',
     POSTGRES_PASSWORD: COMPLETE_STORE.postgresPassword,
+    POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256',
     PGDATA: '/var/lib/postgresql/data',
   },
   redisEnv: {
@@ -118,6 +119,7 @@ test('sidecars receive only their own secrets', () => {
     'POSTGRES_DB',
     'POSTGRES_USER',
     'POSTGRES_PASSWORD',
+    'POSTGRES_INITDB_ARGS',
     'PGDATA',
   ])
   assert.deepEqual(Object.keys(redisEnv), ['REDIS_PASSWORD'])

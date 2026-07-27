@@ -250,6 +250,9 @@ or later MinIO failure prevents a healthy service state.
   is exposed through StartOS actions instead.
 - **There is no full browser client.** Only the limited invite and repository
   routes in the relay image are enabled.
+- **PostgreSQL loopback access requires its password.** Clean initialization
+  and logical restore both configure SCRAM authentication for TCP clients;
+  private loopback networking is not treated as an authentication boundary.
 - **Restore diagnostics are sensitive.** The accepted Start SDK 2.0.9
   residual can include the PostgreSQL password in local restore error argv/log
   output if password restoration fails. Do not publish or attach unredacted
@@ -334,14 +337,14 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
 
 ## Status
 
-- The automated suite contains 127 unit tests covering identity, immutable URL
+- The automated suite contains 128 unit tests covering identity, immutable URL
   state, secrets, runtime configuration, daemon health, membership
   serialization, and backup policy.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
-- A prior native-stack checkpoint built and inspected both local architecture
-  packages. Those checkpoint archives predate later membership, backup, and
-  documentation work and are not release artifacts.
+- Signed x86_64 and aarch64 candidates were built and statically inspected at
+  package commit `20badb8`. The later device-evidence commit changed the package
+  tree, so those archives are non-final and are not release artifacts.
 - No StartOS device matrix item has been completed. Install, client, media,
   Git, restart, failure, backup/restore, and resource behavior remain unproven
   on both architectures.

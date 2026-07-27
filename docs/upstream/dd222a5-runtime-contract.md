@@ -187,6 +187,7 @@ BUZZ_RELAY_PRIVATE_KEY=<stored-64-hex-private-key>
 POSTGRES_DB=buzz
 POSTGRES_USER=buzz
 POSTGRES_PASSWORD=<stored-postgres-password>
+POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
 PGDATA=/var/lib/postgresql/data
 
 # Redis daemon
@@ -220,7 +221,11 @@ The package deliberately does not emit:
   [Postgres event store](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/crates/buzz-db/src/lib.rs#L1-L10);
   it also holds communities, membership, names, workflows, and other relay
   metadata. StartOS backs it up with a logical database dump, not a raw volume
-  copy.
+  copy. Clean initialization passes
+  `POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256`, and logical restore passes
+  the equivalent `initdb` argument, so later loopback TCP clients must
+  authenticate with the preserved password. The SDK restore hook uses a local
+  Unix socket while PostgreSQL is isolated from TCP.
 - **MinIO is authoritative object state.** It stores media and the durable Git
   manifests/packs. Git hydration explicitly says
   [object storage remains authoritative](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/crates/buzz-relay/src/api/git/hydrate.rs#L1-L23).

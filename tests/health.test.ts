@@ -21,6 +21,7 @@ const RUNTIME_CONFIG: RuntimeConfig = {
     POSTGRES_DB: 'buzz',
     POSTGRES_USER: 'buzz',
     POSTGRES_PASSWORD: 'postgres-secret',
+    POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256',
     PGDATA: '/var/lib/postgresql/data',
   },
   redisEnv: {

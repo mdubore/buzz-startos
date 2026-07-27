@@ -113,6 +113,7 @@ export function buildRuntimeConfig(
       POSTGRES_DB,
       POSTGRES_USER,
       POSTGRES_PASSWORD: postgresPassword,
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256',
       PGDATA: '/var/lib/postgresql/data',
     },
     redisEnv: {

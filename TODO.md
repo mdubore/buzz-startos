@@ -11,6 +11,3 @@
 - [ ] Track an upstream Start SDK fix for the 2.0.9 PostgreSQL restore error
       path that can include the database password in local argv/log output.
       Until resolved, treat exported restore diagnostics as sensitive.
-- [ ] Run a final reviewed release audit covering source provenance, CI pins,
-      archive signatures, checksums, license/assets, security limitations,
-      backup authority, and all remaining device-test gaps.

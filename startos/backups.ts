@@ -21,6 +21,10 @@ const BACKUP_VOLUME_ID_TUPLE = Object.freeze([
 
 export const BACKUP_VOLUME_IDS: readonly string[] = BACKUP_VOLUME_ID_TUPLE
 
+const POSTGRES_RESTORE_INITDB_ARGS: readonly string[] = Object.freeze([
+  '--auth-host=scram-sha-256',
+])
+
 export type CreateBackupDependencies = {
   readStoredStateOnce: () => Promise<StoredStateRead>
   createBackup: T.ExpectedExports.createBackup
@@ -44,17 +48,22 @@ export async function createBackupWith(
   return dependencies.createBackup(options)
 }
 
-function buildBackups() {
-  const backups = sdk.Backups.withPgDump({
-    imageId: 'postgres',
-    dbVolume: 'postgres',
+export function buildPostgresBackupConfig() {
+  return {
+    imageId: 'postgres' as const,
+    dbVolume: 'postgres' as const,
     mountpoint: POSTGRES_MOUNTPOINT,
     pgdataPath: POSTGRES_DATA_PATH,
     database: POSTGRES_DB,
     user: POSTGRES_USER,
     password: async () => readBackupPostgresPassword(readStoredStateOnce),
+    initdbArgs: [...POSTGRES_RESTORE_INITDB_ARGS],
     readyTimeout: 120_000,
-  })
+  }
+}
+
+function buildBackups() {
+  const backups = sdk.Backups.withPgDump(buildPostgresBackupConfig())
 
   for (const volumeId of BACKUP_VOLUME_ID_TUPLE) {
     backups.addVolume(volumeId)

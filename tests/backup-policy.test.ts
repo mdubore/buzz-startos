@@ -5,6 +5,7 @@ import type { T } from '@start9labs/start-sdk'
 
 import {
   BACKUP_VOLUME_IDS,
+  buildPostgresBackupConfig,
   createBackupWith,
   readBackupPostgresPassword,
 } from '../startos/backups.js'
@@ -30,6 +31,12 @@ test('PostgreSQL uses a logical dump while MinIO is authoritative for media and 
   assert.equal(BACKUP_VOLUME_IDS.includes('postgres'), false)
   assert.equal(BACKUP_VOLUME_IDS.includes('git-cache'), false)
   assert.equal(Object.isFrozen(BACKUP_VOLUME_IDS), true)
+})
+
+test('PostgreSQL restore construction requires SCRAM authentication for TCP clients', () => {
+  assert.deepEqual(buildPostgresBackupConfig().initdbArgs, [
+    '--auth-host=scram-sha-256',
+  ])
 })
 
 test('backup preflight rejects malformed state without calling the delegate or exposing stored values', async () => {
