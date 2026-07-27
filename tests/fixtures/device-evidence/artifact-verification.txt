@@ -1,0 +1,2 @@
+Synthetic checksum, signature, signer, manifest, and architecture verification.
+This file contains only deterministic test-fixture output.

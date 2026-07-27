@@ -1,4 +1,7 @@
-import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { readFile, realpath, stat } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import Ajv2020, { type AnySchema, type ErrorObject } from 'ajv/dist/2020.js'
 import addFormats from 'ajv-formats'
@@ -22,11 +25,19 @@ const OFFICIAL_STARTOS_COMMIT = '514af0c2fa076c8b597d9861f882bdb1b3411d9e'
 
 const FORBIDDEN_SENSITIVE_VALUES = [
   /\bnsec1[023456789acdefghjklmnpqrstuvwxyz]+\b/i,
-  /\bAuthorization\s*:\s*\S+/i,
-  /\b(?:POSTGRES_PASSWORD|REDIS_PASSWORD|MINIO_ROOT_PASSWORD)\s*[:=]/i,
-  /\b(?:BUZZ_RELAY_PRIVATE_KEY|BUZZ_GIT_HOOK_HMAC_SECRET)\s*[:=]/i,
+  /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/i,
+  /\b(?:Authorization|Proxy-Authorization)\s*:\s*(?:Bearer|Basic)?\s*\S+/i,
+  /\b(?:Cookie|Set-Cookie)\s*:/i,
+  /\b(?:password|passwd|secret|token)\s*[:=]\s*\S+/i,
+  /\b(?:POSTGRES_PASSWORD|REDIS_PASSWORD|MINIO_ROOT_(?:USER|PASSWORD))\s*[:=]/i,
+  /\b(?:BUZZ_RELAY_PRIVATE_KEY|BUZZ_GIT_HOOK_HMAC_SECRET|BUZZ_S3_(?:ACCESS|SECRET)_KEY)\s*[:=]/i,
+  /\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^:@/\s]+:[^@/\s]+@/i,
   /\bpostgres(?:ql)?:\/\/[^:@/\s]+:[^@/\s]+@/i,
   /\bredis:\/\/:[^@/\s]+@/i,
+] as const
+
+const AUTHORIZATION_EVENT_KINDS = [
+  9030, 9031, 9032, 9033, 41010, 41011, 41012, 30620, 46020, 46030, 46031,
 ] as const
 
 type Architecture = keyof typeof ARCHIVES
@@ -74,7 +85,7 @@ export type CandidateContract = {
     artifacts: Record<Architecture, UpgradeArtifact>
   }
   promotionControls: {
-    authenticatedOperatorReviewerBinding: 'PENDING' | 'ENFORCED'
+    authenticatedOperatorReviewerBinding: 'PENDING'
   }
 }
 
@@ -232,6 +243,127 @@ function collectSensitiveErrors(
       collectSensitiveErrors(item, `${path}.${key}`, errors)
     }
   }
+  return errors
+}
+
+function containsSensitiveValue(value: string): boolean {
+  return FORBIDDEN_SENSITIVE_VALUES.some((pattern) => pattern.test(value))
+}
+
+function commandArgumentErrors(execution: Record<string, unknown>): string[] {
+  if (!Array.isArray(execution.commands)) return []
+  const errors: string[] = []
+  for (const [commandIndex, command] of execution.commands.entries()) {
+    if (!isRecord(command) || !Array.isArray(command.args)) continue
+    const args = command.args.filter(
+      (argument): argument is string => typeof argument === 'string',
+    )
+    for (const [argumentIndex, argument] of args.entries()) {
+      if (
+        /^--?(?:password|passwd|secret|token)$/i.test(argument) &&
+        args[argumentIndex + 1] !== undefined
+      ) {
+        errors.push(
+          `execution.commands[${commandIndex}] contains a forbidden sensitive command argument`,
+        )
+      }
+      if (/^--?(?:password|passwd|secret|token)=/i.test(argument)) {
+        errors.push(
+          `execution.commands[${commandIndex}] contains a forbidden sensitive command argument`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+function pathIsContained(base: string, target: string): boolean {
+  const pathFromBase = relative(base, target)
+  return (
+    pathFromBase !== '..' &&
+    !pathFromBase.startsWith(`..${sep}`) &&
+    !isAbsolute(pathFromBase)
+  )
+}
+
+async function attachmentErrors(
+  document: unknown,
+  evidencePath: URL,
+): Promise<string[]> {
+  if (!isRecord(document) || document.example === true) return []
+  const attachments = Array.isArray(document.evidence)
+    ? document.evidence.filter(isRecord)
+    : []
+  const errors: string[] = []
+  const evidenceDirectory = dirname(fileURLToPath(evidencePath))
+  const realEvidenceDirectory = await realpath(evidenceDirectory)
+
+  for (const [index, attachment] of attachments.entries()) {
+    const label =
+      typeof attachment.id === 'string'
+        ? `evidence ${attachment.id}`
+        : `evidence attachment ${index}`
+    const attachmentPath = attachment.path
+    if (
+      typeof attachmentPath !== 'string' ||
+      attachmentPath.length === 0 ||
+      isAbsolute(attachmentPath) ||
+      /^[A-Za-z][A-Za-z0-9+.-]*:/.test(attachmentPath) ||
+      attachmentPath.includes('\\') ||
+      attachmentPath.includes('?') ||
+      attachmentPath.includes('#') ||
+      attachmentPath.includes('\0')
+    ) {
+      errors.push(`${label} must use a local relative path`)
+      continue
+    }
+
+    const segments = attachmentPath.split('/')
+    if (segments.includes('..')) {
+      errors.push(`${label} escapes its evidence directory`)
+      continue
+    }
+
+    const resolvedPath = resolve(evidenceDirectory, attachmentPath)
+    if (!pathIsContained(evidenceDirectory, resolvedPath)) {
+      errors.push(`${label} escapes its evidence directory`)
+      continue
+    }
+
+    let realAttachmentPath: string
+    try {
+      realAttachmentPath = await realpath(resolvedPath)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      errors.push(
+        code === 'ENOENT'
+          ? `${label} does not exist`
+          : `${label} cannot be opened`,
+      )
+      continue
+    }
+
+    if (!pathIsContained(realEvidenceDirectory, realAttachmentPath)) {
+      errors.push(`${label} escapes its evidence directory`)
+      continue
+    }
+
+    const attachmentStat = await stat(realAttachmentPath)
+    if (!attachmentStat.isFile()) {
+      errors.push(`${label} is not a regular file`)
+      continue
+    }
+
+    const contents = await readFile(realAttachmentPath)
+    const observedSha256 = createHash('sha256').update(contents).digest('hex')
+    if (attachment.sha256 !== observedSha256) {
+      errors.push(`${label} SHA-256 mismatch`)
+    }
+    if (containsSensitiveValue(contents.toString('utf8'))) {
+      errors.push(`${label} attachment contains a forbidden sensitive value`)
+    }
+  }
+
   return errors
 }
 
@@ -434,11 +566,10 @@ function candidateContractErrors(value: unknown): string[] {
   ) {
     errors.push('upgrade source identity is invalid')
   }
-  if (
-    promotionControls.authenticatedOperatorReviewerBinding !== 'PENDING' &&
-    promotionControls.authenticatedOperatorReviewerBinding !== 'ENFORCED'
-  ) {
-    errors.push('candidate promotion control state is invalid')
+  if (promotionControls.authenticatedOperatorReviewerBinding !== 'PENDING') {
+    errors.push(
+      'candidate promotion control must remain PENDING until authenticated binding is implemented',
+    )
   }
 
   const frozenValues = [
@@ -495,11 +626,234 @@ async function schemaErrors(
   const schema = await parseJson(schemaPath)
   if (!isSchema(schema))
     throw new Error('device evidence schema must be an object')
-  const ajv = new Ajv2020({ allErrors: true, strict: true })
+  const ajv = new Ajv2020({
+    allErrors: true,
+    strict: true,
+    strictRequired: false,
+  })
   addFormats(ajv)
   const validate = ajv.compile(schema)
   if (validate(document)) return []
   return (validate.errors ?? []).map(formatSchemaError)
+}
+
+function authorizationRegressionErrors(
+  document: Record<string, unknown>,
+  gateId: string,
+): string[] {
+  const regression = isRecord(document.authorizationRegression)
+    ? document.authorizationRegression
+    : null
+  if (gateId !== 'AUTH-02') {
+    return regression === null
+      ? []
+      : ['only AUTH-02 may carry authorizationRegression']
+  }
+  if (regression === null || !Array.isArray(regression.cases)) {
+    return ['AUTH-02 requires authorizationRegression']
+  }
+
+  const errors: string[] = []
+  const expected = new Set<string>()
+  for (const role of ['owner', 'admin', 'member']) {
+    for (const state of ['active-ban', 'active-timeout']) {
+      for (const kind of AUTHORIZATION_EVENT_KINDS) {
+        expected.add(`${role}/${state}/${kind}`)
+      }
+    }
+  }
+  for (const state of ['expired-ban', 'expired-timeout', 'none']) {
+    for (const kind of AUTHORIZATION_EVENT_KINDS) {
+      expected.add(`owner/${state}/${kind}`)
+    }
+  }
+
+  const observed = new Set<string>()
+  for (const authorizationCase of regression.cases.filter(isRecord)) {
+    const role = authorizationCase.principalRole
+    const state = authorizationCase.restrictionState
+    const kind = authorizationCase.eventKind
+    const key = `${String(role)}/${String(state)}/${String(kind)}`
+    observed.add(key)
+
+    if (state === 'active-ban' || state === 'active-timeout') {
+      if (authorizationCase.outcome !== 'rejected') {
+        errors.push(
+          'active bans and timeouts must reject every covered event kind',
+        )
+      }
+      if (authorizationCase.eventPersisted !== false) {
+        errors.push('rejected authorization cases must not persist writes')
+      }
+      if (authorizationCase.clientError !== 'request rejected') {
+        errors.push(
+          'rejected authorization cases require the stable generic error',
+        )
+      }
+    }
+
+    if (state === 'expired-ban' || state === 'expired-timeout') {
+      if (
+        authorizationCase.outcome !== 'accepted' ||
+        authorizationCase.eventPersisted !== true ||
+        authorizationCase.clientError !== null
+      ) {
+        errors.push(
+          'expired restrictions must follow an accepted authorized path',
+        )
+      }
+    }
+
+    if (state === 'none') {
+      if (
+        authorizationCase.outcome !== 'accepted' ||
+        authorizationCase.eventPersisted !== true ||
+        authorizationCase.clientError !== null
+      ) {
+        errors.push('unrestricted authorized cases must be accepted')
+      }
+    }
+
+    if (authorizationCase.rawDatabaseTextObserved !== false) {
+      errors.push(
+        'authorization cases must not expose raw database or SQL text',
+      )
+    }
+  }
+
+  if (
+    observed.size !== expected.size ||
+    [...expected].some((key) => !observed.has(key)) ||
+    regression.cases.length !== expected.size
+  ) {
+    errors.push(
+      'authorizationRegression must cover exactly all required role/state/event-kind cases',
+    )
+  }
+
+  return errors
+}
+
+function restoreEndpointIsComplete(endpoint: unknown): boolean {
+  if (!isRecord(endpoint)) return false
+  return (
+    (endpoint.architecture === 'x86_64' ||
+      endpoint.architecture === 'aarch64') &&
+    typeof endpoint.model === 'string' &&
+    endpoint.model.length > 0 &&
+    typeof endpoint.cpu === 'string' &&
+    endpoint.cpu.length > 0 &&
+    Number.isInteger(endpoint.cores) &&
+    Number.isInteger(endpoint.memoryBytes) &&
+    typeof endpoint.storage === 'string' &&
+    endpoint.storage.length > 0 &&
+    typeof endpoint.startosBuildId === 'string' &&
+    endpoint.startosBuildId.length > 0 &&
+    isSha256(endpoint.startosImageSha256)
+  )
+}
+
+function restoreTrialErrors(
+  document: Record<string, unknown>,
+  gateId: string,
+  candidate: CandidateContract,
+): string[] {
+  const trials = Array.isArray(document.restoreTrials)
+    ? document.restoreTrials
+    : null
+  if (gateId !== 'BKP-01') {
+    return trials === null ? [] : ['only BKP-01 may carry restoreTrials']
+  }
+  if (trials === null) return ['BKP-01 requires restoreTrials']
+
+  const errors: string[] = []
+  const directions = new Set<string>()
+  for (const trial of trials.filter(isRecord)) {
+    const source = isRecord(trial.source) ? trial.source : {}
+    const target = isRecord(trial.target) ? trial.target : {}
+    const direction = `${String(source.architecture)}->${String(target.architecture)}`
+    directions.add(direction)
+    if (
+      !restoreEndpointIsComplete(source) ||
+      !restoreEndpointIsComplete(target)
+    ) {
+      errors.push('restore trial endpoints require complete hardware identity')
+    }
+    for (const endpoint of [source, target]) {
+      if (
+        endpoint.architecture === 'x86_64' ||
+        endpoint.architecture === 'aarch64'
+      ) {
+        const startosIdentity =
+          candidate.startos.architectures[endpoint.architecture]
+        if (
+          endpoint.startosBuildId !== startosIdentity.buildId ||
+          endpoint.startosImageSha256 !== startosIdentity.imageSha256
+        ) {
+          errors.push(
+            'restore trial endpoints must match the frozen StartOS identity',
+          )
+        }
+      }
+    }
+    if (
+      source.architecture !== target.architecture &&
+      trial.nativePackageReinstalled !== true
+    ) {
+      errors.push('cross-architecture restores require native reinstall')
+    }
+  }
+
+  for (const direction of [
+    'x86_64->x86_64',
+    'aarch64->aarch64',
+    'x86_64->aarch64',
+    'aarch64->x86_64',
+  ]) {
+    if (!directions.has(direction)) {
+      errors.push(`BKP-01 requires ${direction} restore evidence`)
+    }
+  }
+  if (directions.size !== 4 || trials.length !== 4) {
+    errors.push('BKP-01 restore directions must be unique')
+  }
+  return errors
+}
+
+function upgradeSourceErrors(
+  document: Record<string, unknown>,
+  gateId: string,
+  architecture: unknown,
+  candidate: CandidateContract,
+): string[] {
+  const upgradeSource = isRecord(document.upgradeSource)
+    ? document.upgradeSource
+    : null
+  if (gateId !== 'UPG-01') {
+    return upgradeSource === null ? [] : ['only UPG-01 may carry upgradeSource']
+  }
+  if (upgradeSource === null) return ['UPG-01 requires upgradeSource']
+  if (architecture !== 'x86_64' && architecture !== 'aarch64') return []
+
+  const expected = candidate.upgradeSource
+  const expectedArtifact = expected.artifacts[architecture]
+  const observedArtifact = isRecord(upgradeSource.artifact)
+    ? upgradeSource.artifact
+    : {}
+  const matches =
+    upgradeSource.tag === expected.tag &&
+    upgradeSource.version === expected.version &&
+    upgradeSource.packageCommit === expected.packageCommit &&
+    upgradeSource.upstreamCommit === expected.upstreamCommit &&
+    upgradeSource.signerFingerprint === expected.signerFingerprint &&
+    observedArtifact.name === expectedArtifact.name &&
+    observedArtifact.sha256 === expectedArtifact.sha256
+
+  return matches
+    ? []
+    : [
+        'upgradeSource does not match the fixed :2 identity for its architecture',
+      ]
 }
 
 function customEvidenceErrors(
@@ -530,6 +884,7 @@ function customEvidenceErrors(
   const issues = Array.isArray(document.issues)
     ? document.issues.filter(isRecord)
     : []
+  errors.push(...commandArgumentErrors(execution))
 
   const gate = catalog.gates.find(({ id }) => id === gateId)
   if (gate === undefined) {
@@ -549,6 +904,11 @@ function customEvidenceErrors(
   }
 
   const architecture = device.architecture
+  errors.push(
+    ...authorizationRegressionErrors(document, gateId),
+    ...restoreTrialErrors(document, gateId, candidate),
+    ...upgradeSourceErrors(document, gateId, architecture, candidate),
+  )
   if (
     (architecture === 'x86_64' || architecture === 'aarch64') &&
     archive.name !== ARCHIVES[architecture]
@@ -770,6 +1130,7 @@ export async function validateEvidenceFile(
     ])
     const errors = [
       ...(await schemaErrors(document, schemaPath)),
+      ...(await attachmentErrors(document, path)),
       ...customEvidenceErrors(document, catalog, candidate),
     ]
     return { valid: errors.length === 0, errors: [...new Set(errors)] }
@@ -894,14 +1255,9 @@ export async function validateRepository(options: {
     if (candidate.state !== 'FROZEN') {
       errors.push('promotion rejected because candidate is UNFROZEN')
     }
-    if (
-      candidate.promotionControls.authenticatedOperatorReviewerBinding !==
-      'ENFORCED'
-    ) {
-      errors.push(
-        'promotion requires authenticated operator/reviewer binding to be ENFORCED',
-      )
-    }
+    errors.push(
+      'promotion is disabled until authenticated operator/reviewer binding can be verified',
+    )
     const linkedPassCells = [...parsedCells.values()].filter(
       ({ status, path }) => status === 'PASS' && path !== undefined,
     ).length
@@ -945,7 +1301,13 @@ export async function validateRepository(options: {
         ),
       )
 
-      const evidence = await loadEvidenceDocument(evidencePath)
+      let evidence: unknown
+      try {
+        evidence = await parseJson(evidencePath)
+      } catch {
+        continue
+      }
+      if (isOverlay(evidence)) continue
       if (isRecord(evidence)) {
         if (evidence.gateId !== gate.id) {
           errors.push(`${gate.id}/${architecture} links the wrong gate record`)

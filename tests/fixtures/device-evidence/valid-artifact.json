@@ -105,8 +105,8 @@
     {
       "id": "artifact-verification",
       "kind": "log",
-      "uri": "https://example.test/evidence/artifact-verification.txt",
-      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "path": "artifact-verification.txt",
+      "sha256": "bd11c1c2dbf22011402780b50cd3f69a15c2b77f881be1b0e34bec090924b237",
       "redacted": true,
       "containsSecrets": false
     }

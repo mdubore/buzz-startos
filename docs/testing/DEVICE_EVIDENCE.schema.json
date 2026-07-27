@@ -70,6 +70,20 @@
     },
     "review": {
       "$ref": "#/$defs/review"
+    },
+    "authorizationRegression": {
+      "$ref": "#/$defs/authorizationRegression"
+    },
+    "restoreTrials": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/restoreTrial"
+      }
+    },
+    "upgradeSource": {
+      "$ref": "#/$defs/upgradeSource"
     }
   },
   "allOf": [
@@ -135,6 +149,60 @@
               }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "gateId": {
+            "const": "AUTH-02"
+          }
+        },
+        "required": ["gateId"]
+      },
+      "then": {
+        "required": ["authorizationRegression"]
+      },
+      "else": {
+        "not": {
+          "required": ["authorizationRegression"]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "gateId": {
+            "const": "BKP-01"
+          }
+        },
+        "required": ["gateId"]
+      },
+      "then": {
+        "required": ["restoreTrials"]
+      },
+      "else": {
+        "not": {
+          "required": ["restoreTrials"]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "gateId": {
+            "const": "UPG-01"
+          }
+        },
+        "required": ["gateId"]
+      },
+      "then": {
+        "required": ["upgradeSource"]
+      },
+      "else": {
+        "not": {
+          "required": ["upgradeSource"]
         }
       }
     }
@@ -431,7 +499,7 @@
       "required": [
         "id",
         "kind",
-        "uri",
+        "path",
         "sha256",
         "redacted",
         "containsSecrets"
@@ -444,9 +512,9 @@
         "kind": {
           "enum": ["log", "screenshot", "metrics", "json", "checksum", "report"]
         },
-        "uri": {
+        "path": {
           "type": "string",
-          "format": "uri-reference"
+          "minLength": 1
         },
         "sha256": {
           "$ref": "#/$defs/sha256"
@@ -456,6 +524,175 @@
         },
         "containsSecrets": {
           "const": false
+        }
+      }
+    },
+    "authorizationCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principalRole",
+        "restrictionState",
+        "eventKind",
+        "outcome",
+        "eventPersisted",
+        "clientError",
+        "rawDatabaseTextObserved"
+      ],
+      "properties": {
+        "principalRole": {
+          "enum": ["owner", "admin", "member"]
+        },
+        "restrictionState": {
+          "enum": [
+            "active-ban",
+            "active-timeout",
+            "expired-ban",
+            "expired-timeout",
+            "none"
+          ]
+        },
+        "eventKind": {
+          "enum": [
+            9030, 9031, 9032, 9033, 41010, 41011, 41012, 30620, 46020, 46030,
+            46031
+          ]
+        },
+        "outcome": {
+          "enum": ["accepted", "rejected"]
+        },
+        "eventPersisted": {
+          "type": "boolean"
+        },
+        "clientError": {
+          "type": ["string", "null"]
+        },
+        "rawDatabaseTextObserved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "authorizationRegression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases"],
+      "properties": {
+        "cases": {
+          "type": "array",
+          "minItems": 99,
+          "maxItems": 99,
+          "items": {
+            "$ref": "#/$defs/authorizationCase"
+          }
+        }
+      }
+    },
+    "restoreEndpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture",
+        "model",
+        "cpu",
+        "cores",
+        "memoryBytes",
+        "storage",
+        "startosBuildId",
+        "startosImageSha256"
+      ],
+      "properties": {
+        "architecture": {
+          "enum": ["x86_64", "aarch64"]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cpu": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cores": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "memoryBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "storage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startosBuildId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startosImageSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "restoreTrial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target", "nativePackageReinstalled", "outcome"],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/restoreEndpoint"
+        },
+        "target": {
+          "$ref": "#/$defs/restoreEndpoint"
+        },
+        "nativePackageReinstalled": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "const": "pass"
+        }
+      }
+    },
+    "upgradeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "version",
+        "packageCommit",
+        "upstreamCommit",
+        "signerFingerprint",
+        "artifact"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageCommit": {
+          "$ref": "#/$defs/commit"
+        },
+        "upstreamCommit": {
+          "$ref": "#/$defs/commit"
+        },
+        "signerFingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "sha256"],
+          "properties": {
+            "name": {
+              "enum": ["buzz_x86_64.s9pk", "buzz_aarch64.s9pk"]
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
         }
       }
     },

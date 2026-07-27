@@ -24,6 +24,17 @@ the template and linked records during execution; the release-only
 `npm run verify:device-promotion` command additionally requires one frozen
 identity and exactly 46 linked passing cells.
 
+Production evidence is self-contained. Attachments are local and SHA-256
+verified: validation opens each file, enforces directory containment (including
+resolved symlinks), and scans retained content and command arguments for
+credentials. External evidence URLs and inherited production records do not
+satisfy a matrix cell.
+
+Strict promotion is intentionally disabled even after 46 passing records until a
+protected evidence workflow provides machine-verifiable authenticated
+operator/reviewer provenance. The checked-in `PENDING` field is a release blocker,
+not a flag an evidence author may flip.
+
 ## What Buzz Is
 
 [Buzz](https://github.com/block/buzz) is a self-hosted workspace where people

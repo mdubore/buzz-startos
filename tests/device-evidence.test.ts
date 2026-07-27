@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -14,10 +22,42 @@ type ValidationResult = {
   errors: string[]
 }
 
+type AuthorizationCase = {
+  principalRole: 'owner' | 'admin' | 'member'
+  restrictionState:
+    'active-ban' | 'active-timeout' | 'expired-ban' | 'expired-timeout' | 'none'
+  eventKind: number
+  outcome: 'accepted' | 'rejected'
+  eventPersisted: boolean
+  clientError: string | null
+  rawDatabaseTextObserved: boolean
+}
+
+type RestoreEndpoint = {
+  architecture: 'x86_64' | 'aarch64'
+  model: string
+  cpu: string
+  cores: number
+  memoryBytes: number
+  storage: string
+  startosBuildId: string
+  startosImageSha256: string
+}
+
+type RestoreTrial = {
+  source: RestoreEndpoint
+  target: RestoreEndpoint
+  nativePackageReinstalled: boolean
+  outcome: 'pass'
+}
+
 type MutableEvidenceFixture = {
+  example: boolean
   gateId: string
+  status: string
   device: {
     architecture: string
+    virtualization: string
     startos: {
       buildId: string
       imageSha256: string
@@ -31,6 +71,14 @@ type MutableEvidenceFixture = {
     }
     packageCommit: string
   }
+  execution: {
+    operator: string
+    commands: Array<{
+      program: string
+      args: string[]
+      exitCode: number
+    }>
+  }
   assertions: Array<{
     id: string
     expected: string
@@ -38,6 +86,32 @@ type MutableEvidenceFixture = {
     outcome: string
     evidenceIds: string[]
   }>
+  evidence: Array<{
+    id: string
+    kind: string
+    path: string
+    sha256: string
+    redacted: boolean
+    containsSecrets: boolean
+  }>
+  review: {
+    reviewer: string
+  }
+  authorizationRegression?: {
+    cases: AuthorizationCase[]
+  }
+  restoreTrials?: RestoreTrial[]
+  upgradeSource?: {
+    tag: string
+    version: string
+    packageCommit: string
+    upstreamCommit: string
+    signerFingerprint: string
+    artifact: {
+      name: string
+      sha256: string
+    }
+  }
 }
 
 type DeviceEvidenceValidator = {
@@ -78,8 +152,22 @@ type DeviceEvidenceValidator = {
         }
       >
     }
+    upgradeSource: {
+      tag: string
+      version: string
+      packageCommit: string
+      upstreamCommit: string
+      signerFingerprint: string
+      artifacts: Record<
+        'x86_64' | 'aarch64',
+        {
+          name: string
+          sha256: string
+        }
+      >
+    }
     promotionControls: {
-      authenticatedOperatorReviewerBinding: 'PENDING' | 'ENFORCED'
+      authenticatedOperatorReviewerBinding: 'PENDING'
     }
   }>
   validateEvidenceFile(
@@ -149,8 +237,98 @@ const gateIds = [
   'RES-01',
   'LIF-01',
 ]
+const authorizationEventKinds = [
+  9030, 9031, 9032, 9033, 41010, 41011, 41012, 30620, 46020, 46030, 46031,
+] as const
 
 const repositoryFile = (path: string) => new URL(`../${path}`, import.meta.url)
+
+const sha256 = (value: string | Uint8Array): string =>
+  createHash('sha256').update(value).digest('hex')
+
+function authorizationCases(): AuthorizationCase[] {
+  const cases: AuthorizationCase[] = []
+  for (const principalRole of ['owner', 'admin', 'member'] as const) {
+    for (const restrictionState of ['active-ban', 'active-timeout'] as const) {
+      for (const eventKind of authorizationEventKinds) {
+        cases.push({
+          principalRole,
+          restrictionState,
+          eventKind,
+          outcome: 'rejected',
+          eventPersisted: false,
+          clientError: 'request rejected',
+          rawDatabaseTextObserved: false,
+        })
+      }
+    }
+  }
+  for (const restrictionState of [
+    'expired-ban',
+    'expired-timeout',
+    'none',
+  ] as const) {
+    for (const eventKind of authorizationEventKinds) {
+      cases.push({
+        principalRole: 'owner',
+        restrictionState,
+        eventKind,
+        outcome: 'accepted',
+        eventPersisted: true,
+        clientError: null,
+        rawDatabaseTextObserved: false,
+      })
+    }
+  }
+  return cases
+}
+
+function restoreEndpoint(
+  architecture: 'x86_64' | 'aarch64',
+  role: string,
+): RestoreEndpoint {
+  return {
+    architecture,
+    model: `Fixture ${architecture} ${role}`,
+    cpu: `Fixture ${architecture} CPU`,
+    cores: 4,
+    memoryBytes: 8589934592,
+    storage: `Fixture ${architecture} SSD`,
+    startosBuildId:
+      architecture === 'x86_64'
+        ? '0.4.0-evidence-fixture'
+        : '0.4.0-evidence-fixture-arm',
+    startosImageSha256:
+      architecture === 'x86_64' ? 'e'.repeat(64) : '3'.repeat(64),
+  }
+}
+
+function completeRestoreTrials(): RestoreTrial[] {
+  return [
+    ['x86_64', 'x86_64'],
+    ['aarch64', 'aarch64'],
+    ['x86_64', 'aarch64'],
+    ['aarch64', 'x86_64'],
+  ].map(([sourceArchitecture, targetArchitecture]) => ({
+    source: restoreEndpoint(
+      sourceArchitecture as 'x86_64' | 'aarch64',
+      'source',
+    ),
+    target: restoreEndpoint(
+      targetArchitecture as 'x86_64' | 'aarch64',
+      'target',
+    ),
+    nativePackageReinstalled: sourceArchitecture !== targetArchitecture,
+    outcome: 'pass' as const,
+  }))
+}
+
+async function retainFixtureAttachment(directory: string): Promise<void> {
+  await writeFile(
+    join(directory, 'artifact-verification.txt'),
+    await readFile(fixture('artifact-verification.txt')),
+  )
+}
 
 function matrixFixture(
   cells: Record<string, { x86_64?: string; aarch64?: string }>,
@@ -162,6 +340,35 @@ function matrixFixture(
       return `| ${gateId} | fixture | fixture | ${x86Cell} | ${armCell} | fixture |`
     })
     .join('\n')
+}
+
+function requirePassingAssertions(
+  record: MutableEvidenceFixture,
+  ids: string[],
+): void {
+  record.assertions = ids.map((id) => ({
+    id,
+    expected: 'Fixture expectation',
+    observed: 'Fixture observation',
+    outcome: 'pass',
+    evidenceIds: ['artifact-verification'],
+  }))
+}
+
+function upgradeSourceFor(
+  candidate: Awaited<
+    ReturnType<DeviceEvidenceValidator['loadCandidateContract']>
+  >,
+  architecture: 'x86_64' | 'aarch64',
+): NonNullable<MutableEvidenceFixture['upgradeSource']> {
+  return {
+    tag: candidate.upgradeSource.tag,
+    version: candidate.upgradeSource.version,
+    packageCommit: candidate.upgradeSource.packageCommit,
+    upstreamCommit: candidate.upgradeSource.upstreamCommit,
+    signerFingerprint: candidate.upgradeSource.signerFingerprint,
+    artifact: candidate.upgradeSource.artifacts[architecture],
+  }
 }
 
 async function loadValidator(): Promise<DeviceEvidenceValidator> {
@@ -215,6 +422,25 @@ test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async (
   )
 })
 
+test('rejects a manually asserted authenticated-review enforcement flag', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-binding-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const candidate = JSON.parse(await readFile(frozenCandidatePath, 'utf8')) as {
+    promotionControls: {
+      authenticatedOperatorReviewerBinding: string
+    }
+  }
+  candidate.promotionControls.authenticatedOperatorReviewerBinding = 'ENFORCED'
+  const attemptedContract = join(directory, 'candidate.json')
+  await writeFile(attemptedContract, JSON.stringify(candidate))
+
+  await assert.rejects(
+    () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+    /must remain PENDING until authenticated binding is implemented/,
+  )
+})
+
 test('defines the complete acyclic 46-cell production gate catalog', async () => {
   const validator = await loadValidator()
   const catalog = await validator.loadGateCatalog(catalogPath)
@@ -248,6 +474,238 @@ test('rejects production evidence while the repository candidate is unfrozen', a
   assert.equal(result.valid, false)
   assert.ok(
     result.errors.some((error) => error.includes('candidate is UNFROZEN')),
+    result.errors.join('\n'),
+  )
+})
+
+test('rejects fixture inheritance unless a test explicitly enables it', async () => {
+  const validator = await loadValidator()
+  const result = await validator.validateEvidenceFile(
+    fixture('invalid-beta-os.json'),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('cannot use fixture inheritance overlays'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+for (const [label, attachmentPath, expectedError] of [
+  ['absolute attachment', '/tmp/captured.txt', 'local relative path'],
+  [
+    'attachment URL',
+    'https://example.test/captured.txt',
+    'local relative path',
+  ],
+  ['path traversal', '../captured.txt', 'escapes its evidence directory'],
+] as const) {
+  test(`rejects ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-path-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.evidence[0].path = attachmentPath
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) => error.includes(expectedError)),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+test('rejects attachment symlinks that escape the evidence directory', async (t) => {
+  const validator = await loadValidator()
+  const root = await mkdtemp(join(tmpdir(), 'buzz-device-symlink-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const directory = join(root, 'record')
+  await mkdir(directory)
+  await writeFile(join(root, 'outside.txt'), 'sanitized fixture output\n')
+  await symlink('../outside.txt', join(directory, 'captured.txt'))
+
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.evidence[0].path = 'captured.txt'
+  record.evidence[0].sha256 = sha256('sanitized fixture output\n')
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('escapes its evidence directory'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+for (const [label, prepare, expectedError] of [
+  [
+    'missing attachment',
+    async (_directory: string, record: MutableEvidenceFixture) => {
+      record.evidence[0].path = 'missing.txt'
+    },
+    'does not exist',
+  ],
+  [
+    'attachment directory',
+    async (directory: string, record: MutableEvidenceFixture) => {
+      await mkdir(join(directory, 'captured'))
+      record.evidence[0].path = 'captured'
+    },
+    'is not a regular file',
+  ],
+  [
+    'attachment hash mismatch',
+    async (directory: string, record: MutableEvidenceFixture) => {
+      await retainFixtureAttachment(directory)
+      record.evidence[0].sha256 = '0'.repeat(64)
+    },
+    'SHA-256 mismatch',
+  ],
+] as const) {
+  test(`rejects ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-file-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    await prepare(directory, record)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) => error.includes(expectedError)),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+for (const [label, contents] of [
+  ['PEM private key', '-----BEGIN PRIVATE KEY-----\nfixture\n'],
+  ['bearer authorization', 'Authorization: Bearer fixture-credential\n'],
+  ['cookie header', 'Cookie: session=fixture-cookie\n'],
+  ['password assignment', 'password=fixture-password\n'],
+  ['password URL', 'postgres://buzz:fixture-password@postgres/buzz\n'],
+  ['Nostr private key', `nsec1${'q'.repeat(58)}\n`],
+  ['Buzz service secret', 'BUZZ_GIT_HOOK_HMAC_SECRET=fixture-secret\n'],
+] as const) {
+  test(`rejects ${label} in retained attachment content`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-secret-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.evidence[0].path = 'captured.txt'
+    record.evidence[0].sha256 = sha256(contents)
+    await writeFile(join(directory, 'captured.txt'), contents)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes('attachment contains a forbidden sensitive value'),
+      ),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+for (const args of [
+  ['--password', 'fixture-password'],
+  ['--secret=fixture-secret'],
+  ['--token', 'fixture-token'],
+]) {
+  test(`rejects credential-bearing command argv ${args[0]}`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-argv-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.execution.commands = [
+      { program: 'fixture-command', args, exitCode: 0 },
+    ]
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes('forbidden sensitive command argument'),
+      ),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+test('compares operator and reviewer identities case-insensitively', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-reviewer-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.execution.operator = '@Same-Actor'
+  record.review.reviewer = '@same-actor'
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) => error.includes('independent reviewer')),
     result.errors.join('\n'),
   )
 })
@@ -291,6 +749,466 @@ test('returns validation errors instead of throwing for malformed evidence', asy
   assert.ok(result.errors.length > 0)
 })
 
+test('catalogs the complete authorization, restore, and upgrade controls', async () => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const assertions = (gateId: string) =>
+    catalog.gates.find(({ id }) => id === gateId)?.requiredAssertions ?? []
+
+  for (const assertion of [
+    'authorization.restricted-kind-matrix',
+    'authorization.expired-restriction-path',
+    'authorization.allowed-authorized-path',
+    'authorization.no-write-on-rejection',
+    'authorization.stable-generic-error',
+    'authorization.no-raw-database-text',
+  ]) {
+    assert.ok(assertions('AUTH-02').includes(assertion), assertion)
+  }
+  for (const assertion of [
+    'restore.same-architecture',
+    'restore.cross-architecture-x86-to-aarch64',
+    'restore.cross-architecture-aarch64-to-x86',
+    'restore.native-package-reinstalled',
+  ]) {
+    assert.ok(assertions('BKP-01').includes(assertion), assertion)
+  }
+  assert.ok(assertions('UPG-01').includes('upgrade.source-identity'))
+})
+
+test('accepts the exhaustive AUTH-02 authorization regression structure', async (t) => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const gate = catalog.gates.find(({ id }) => id === 'AUTH-02')
+  assert.ok(gate)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-auth-valid-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.gateId = gate.id
+  requirePassingAssertions(record, gate.requiredAssertions)
+  record.authorizationRegression = { cases: authorizationCases() }
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.deepEqual(result, { valid: true, errors: [] })
+})
+
+for (const [label, mutate, expectedError] of [
+  [
+    'a required role/state/kind combination is missing',
+    (cases: AuthorizationCase[]) => {
+      cases.pop()
+    },
+    'authorizationRegression must cover exactly',
+  ],
+  [
+    'an active restriction persists a write',
+    (cases: AuthorizationCase[]) => {
+      const target = cases.find(
+        ({ restrictionState }) => restrictionState === 'active-ban',
+      )
+      assert.ok(target)
+      target.eventPersisted = true
+    },
+    'rejected authorization cases must not persist writes',
+  ],
+  [
+    'an active restriction exposes an unstable client error',
+    (cases: AuthorizationCase[]) => {
+      const target = cases.find(
+        ({ restrictionState }) => restrictionState === 'active-timeout',
+      )
+      assert.ok(target)
+      target.clientError = 'duplicate key violates users_pkey'
+    },
+    'rejected authorization cases require the stable generic error',
+  ],
+  [
+    'a rejection exposes raw database text',
+    (cases: AuthorizationCase[]) => {
+      const target = cases.find(
+        ({ restrictionState }) => restrictionState === 'active-ban',
+      )
+      assert.ok(target)
+      target.rawDatabaseTextObserved = true
+    },
+    'authorization cases must not expose raw database or SQL text',
+  ],
+  [
+    'an expired restriction remains blocked',
+    (cases: AuthorizationCase[]) => {
+      const target = cases.find(
+        ({ restrictionState }) => restrictionState === 'expired-ban',
+      )
+      assert.ok(target)
+      target.outcome = 'rejected'
+      target.eventPersisted = false
+      target.clientError = 'request rejected'
+    },
+    'expired restrictions must follow an accepted authorized path',
+  ],
+  [
+    'the unrestricted authorized path is missing',
+    (cases: AuthorizationCase[]) => {
+      const index = cases.findIndex(
+        ({ restrictionState }) => restrictionState === 'none',
+      )
+      assert.notEqual(index, -1)
+      cases.splice(index, 1)
+    },
+    'authorizationRegression must cover exactly',
+  ],
+] as const) {
+  test(`rejects AUTH-02 when ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const catalog = await validator.loadGateCatalog(catalogPath)
+    const gate = catalog.gates.find(({ id }) => id === 'AUTH-02')
+    assert.ok(gate)
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-auth-bad-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.gateId = gate.id
+    requirePassingAssertions(record, gate.requiredAssertions)
+    const cases = authorizationCases()
+    mutate(cases)
+    record.authorizationRegression = { cases }
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) => error.includes(expectedError)),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+test('accepts BKP-01 only with all same- and cross-architecture restores', async (t) => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const gate = catalog.gates.find(({ id }) => id === 'BKP-01')
+  assert.ok(gate)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-restore-valid-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.gateId = gate.id
+  requirePassingAssertions(record, gate.requiredAssertions)
+  record.restoreTrials = completeRestoreTrials()
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.deepEqual(result, { valid: true, errors: [] })
+})
+
+for (const [source, target] of [
+  ['x86_64', 'x86_64'],
+  ['aarch64', 'aarch64'],
+  ['x86_64', 'aarch64'],
+  ['aarch64', 'x86_64'],
+] as const) {
+  test(`rejects BKP-01 without ${source}->${target} restore evidence`, async (t) => {
+    const validator = await loadValidator()
+    const catalog = await validator.loadGateCatalog(catalogPath)
+    const gate = catalog.gates.find(({ id }) => id === 'BKP-01')
+    assert.ok(gate)
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-restore-bad-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.gateId = gate.id
+    requirePassingAssertions(record, gate.requiredAssertions)
+    record.restoreTrials = completeRestoreTrials().filter(
+      (trial) =>
+        !(
+          trial.source.architecture === source &&
+          trial.target.architecture === target
+        ),
+    )
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) =>
+        error.includes(`BKP-01 requires ${source}->${target} restore evidence`),
+      ),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+test('rejects cross-architecture restore evidence without native reinstall', async (t) => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const gate = catalog.gates.find(({ id }) => id === 'BKP-01')
+  assert.ok(gate)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-restore-native-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.gateId = gate.id
+  requirePassingAssertions(record, gate.requiredAssertions)
+  record.restoreTrials = completeRestoreTrials()
+  const crossTrial = record.restoreTrials.find(
+    (trial) => trial.source.architecture !== trial.target.architecture,
+  )
+  assert.ok(crossTrial)
+  crossTrial.nativePackageReinstalled = false
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('cross-architecture restores require native reinstall'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+for (const [label, mutate, expectedError] of [
+  [
+    'missing target hardware identity',
+    (trials: RestoreTrial[]) => {
+      delete (trials[0].target as Partial<RestoreEndpoint>).cpu
+    },
+    'complete hardware identity',
+  ],
+  [
+    'a target using a different StartOS image',
+    (trials: RestoreTrial[]) => {
+      trials[0].target.startosImageSha256 = '1'.repeat(64)
+    },
+    'match the frozen StartOS identity',
+  ],
+] as const) {
+  test(`rejects BKP-01 with ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const catalog = await validator.loadGateCatalog(catalogPath)
+    const gate = catalog.gates.find(({ id }) => id === 'BKP-01')
+    assert.ok(gate)
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-device-hardware-bad-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.gateId = gate.id
+    requirePassingAssertions(record, gate.requiredAssertions)
+    const trials = completeRestoreTrials()
+    mutate(trials)
+    record.restoreTrials = trials
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.equal(result.valid, false)
+    assert.ok(
+      result.errors.some((error) => error.includes(expectedError)),
+      result.errors.join('\n'),
+    )
+  })
+}
+
+for (const architecture of ['x86_64', 'aarch64'] as const) {
+  test(`accepts exact published :2 upgrade source for ${architecture}`, async (t) => {
+    const validator = await loadValidator()
+    const [catalog, candidate] = await Promise.all([
+      validator.loadGateCatalog(catalogPath),
+      validator.loadCandidateContract(frozenCandidatePath),
+    ])
+    const gate = catalog.gates.find(({ id }) => id === 'UPG-01')
+    assert.ok(gate)
+    const directory = await mkdtemp(
+      join(tmpdir(), 'buzz-device-upgrade-valid-'),
+    )
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const record = JSON.parse(
+      await readFile(fixture('valid-artifact.json'), 'utf8'),
+    ) as MutableEvidenceFixture
+    record.gateId = gate.id
+    requirePassingAssertions(record, gate.requiredAssertions)
+    record.upgradeSource = upgradeSourceFor(candidate, architecture)
+    if (architecture === 'aarch64') {
+      const artifact = candidate.package.artifacts.aarch64
+      if (
+        artifact.sha256 === null ||
+        artifact.sizeBytes === null ||
+        candidate.startos.architectures.aarch64.buildId === null ||
+        candidate.startos.architectures.aarch64.imageSha256 === null
+      ) {
+        assert.fail('frozen fixture candidate must be complete')
+      }
+      record.device.architecture = architecture
+      record.device.startos.buildId =
+        candidate.startos.architectures.aarch64.buildId
+      record.device.startos.imageSha256 =
+        candidate.startos.architectures.aarch64.imageSha256
+      record.releaseCandidate.archive = {
+        name: artifact.name,
+        sha256: artifact.sha256,
+        sizeBytes: artifact.sizeBytes,
+      }
+    }
+    await retainFixtureAttachment(directory)
+    const recordPath = join(directory, 'record.json')
+    await writeFile(recordPath, JSON.stringify(record))
+
+    const result = await validator.validateEvidenceFile(
+      pathToFileURL(recordPath),
+      schemaPath,
+      { candidatePath: frozenCandidatePath },
+    )
+
+    assert.deepEqual(result, { valid: true, errors: [] })
+  })
+}
+
+test('rejects a mismatched UPG-01 published-source artifact hash', async (t) => {
+  const validator = await loadValidator()
+  const [catalog, candidate] = await Promise.all([
+    validator.loadGateCatalog(catalogPath),
+    validator.loadCandidateContract(frozenCandidatePath),
+  ])
+  const gate = catalog.gates.find(({ id }) => id === 'UPG-01')
+  assert.ok(gate)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-upgrade-bad-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.gateId = gate.id
+  requirePassingAssertions(record, gate.requiredAssertions)
+  record.upgradeSource = upgradeSourceFor(candidate, 'x86_64')
+  record.upgradeSource.artifact.sha256 = '0'.repeat(64)
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('upgradeSource does not match the fixed :2 identity'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+test('rejects UPG-01 without the fixed published upgradeSource', async (t) => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const gate = catalog.gates.find(({ id }) => id === 'UPG-01')
+  assert.ok(gate)
+  const directory = await mkdtemp(
+    join(tmpdir(), 'buzz-device-upgrade-missing-'),
+  )
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.gateId = gate.id
+  requirePassingAssertions(record, gate.requiredAssertions)
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('UPG-01 requires upgradeSource'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+test('requires upgradeSource only on UPG-01 records', async (t) => {
+  const validator = await loadValidator()
+  const candidate = await validator.loadCandidateContract(frozenCandidatePath)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-upgrade-extra-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  record.upgradeSource = upgradeSourceFor(candidate, 'x86_64')
+  await retainFixtureAttachment(directory)
+  const recordPath = join(directory, 'record.json')
+  await writeFile(recordPath, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordPath),
+    schemaPath,
+    { candidatePath: frozenCandidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('only UPG-01 may carry upgradeSource'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
 test('validates the template and keeps all 46 production cells NOT RUN', async () => {
   const validator = await loadValidator()
   const result = await validator.validateRepository({
@@ -308,10 +1226,47 @@ test('validates the template and keeps all 46 production cells NOT RUN', async (
   assert.doesNotMatch(matrix, /\[(?:PASS|FAIL|BLOCKED)\]\(/)
 })
 
+test('rejects a matrix-linked inherited evidence record', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-overlay-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  await writeFile(
+    join(directory, 'overlay.json'),
+    JSON.stringify({
+      extends: fixture('valid-artifact.json').href,
+      replace: {},
+    }),
+  )
+  const temporaryMatrix = join(directory, 'DEVICE_TEST_MATRIX.md')
+  await writeFile(
+    temporaryMatrix,
+    matrixFixture({
+      'ART-01': { x86_64: '[PASS](overlay.json)' },
+    }),
+  )
+
+  const result = await validator.validateRepository({
+    candidatePath: frozenCandidatePath,
+    catalogPath,
+    examplePath,
+    matrixPath: pathToFileURL(temporaryMatrix),
+    schemaPath,
+  })
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('cannot use fixture inheritance overlays'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
 test('rejects linked records from different release candidates', async (t) => {
   const validator = await loadValidator()
   const directory = await mkdtemp(join(tmpdir(), 'buzz-device-evidence-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
+  await retainFixtureAttachment(directory)
 
   const x86 = JSON.parse(
     await readFile(fixture('valid-artifact.json'), 'utf8'),
@@ -357,6 +1312,7 @@ test('rejects a passed gate whose dependency has not passed', async (t) => {
   const validator = await loadValidator()
   const directory = await mkdtemp(join(tmpdir(), 'buzz-device-dependency-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
+  await retainFixtureAttachment(directory)
 
   const record = JSON.parse(
     await readFile(fixture('valid-artifact.json'), 'utf8'),
@@ -424,12 +1380,13 @@ test('promotion rejects the unfrozen 46-cell template', async () => {
   )
 })
 
-test('promotion accepts exactly 46 linked records for one frozen candidate', async (t) => {
+test('promotion still fails closed after 46 PASS records without authenticated binding', async (t) => {
   const validator = await loadValidator()
   const catalog = await validator.loadGateCatalog(catalogPath)
   const candidate = await validator.loadCandidateContract(frozenCandidatePath)
   const directory = await mkdtemp(join(tmpdir(), 'buzz-device-promotion-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
+  await retainFixtureAttachment(directory)
 
   const base = JSON.parse(
     await readFile(fixture('valid-artifact.json'), 'utf8'),
@@ -465,13 +1422,16 @@ test('promotion accepts exactly 46 linked records for one frozen candidate', asy
         sha256: archiveSha256,
         sizeBytes: archiveSizeBytes,
       }
-      record.assertions = gate.requiredAssertions.map((id) => ({
-        id,
-        expected: 'Fixture expectation',
-        observed: 'Fixture observation',
-        outcome: 'pass',
-        evidenceIds: ['artifact-verification'],
-      }))
+      requirePassingAssertions(record, gate.requiredAssertions)
+      if (gate.id === 'AUTH-02') {
+        record.authorizationRegression = { cases: authorizationCases() }
+      }
+      if (gate.id === 'BKP-01') {
+        record.restoreTrials = completeRestoreTrials()
+      }
+      if (gate.id === 'UPG-01') {
+        record.upgradeSource = upgradeSourceFor(candidate, architecture)
+      }
 
       const fileName = `${gate.id.toLowerCase()}-${architecture}.json`
       cells[gate.id][architecture] = `[PASS](${fileName})`
@@ -494,7 +1454,11 @@ test('promotion accepts exactly 46 linked records for one frozen candidate', asy
     schemaPath,
   })
 
-  assert.deepEqual(result, { valid: true, errors: [], matrixCells: 46 })
+  assert.equal(result.valid, false)
+  assert.equal(result.matrixCells, 46)
+  assert.deepEqual(result.errors, [
+    'promotion is disabled until authenticated operator/reviewer binding can be verified',
+  ])
 })
 
 test('runs the repository validator through the project tsx configuration', async () => {
@@ -541,6 +1505,23 @@ test('documents the ordered stable StartOS production run', async () => {
   assert.match(runbook, /514af0c2fa076c8b597d9861f882bdb1b3411d9e/)
   assert.match(runbook, /npm run verify:device-promotion/)
   assert.match(runbook, /authenticated.*operator.*reviewer.*binding/i)
+  for (const eventKind of authorizationEventKinds) {
+    assert.match(runbook, new RegExp(`\\b${eventKind}\\b`))
+  }
+  assert.match(runbook, /active ban/i)
+  assert.match(runbook, /active timeout/i)
+  assert.match(runbook, /expired restriction/i)
+  assert.match(runbook, /no\s+(?:event\s+)?write/i)
+  assert.match(runbook, /request rejected/)
+  assert.match(runbook, /raw (?:database|DB).*SQL/i)
+  assert.match(runbook, /x86_64.*aarch64/)
+  assert.match(runbook, /aarch64.*x86_64/)
+  assert.match(runbook, /projects\/start-os\/docs\/src\/backup-restore\.md/)
+  assert.match(
+    runbook,
+    /8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2/,
+  )
+  assert.match(runbook, /promotion is disabled.*authenticated/i)
 
   let previousIndex = -1
   for (const gateId of gateIds) {
@@ -681,6 +1662,7 @@ test('keeps contributor and operator documentation aligned with open gates', asy
   assert.match(readme, /npm run verify:device-evidence/)
   assert.match(readme, /npm run verify:device-promotion/)
   assert.match(readme, /DEVICE_CANDIDATE\.json/)
+  assert.match(readme, /attachments.*local.*SHA-256/i)
   assert.match(
     readme,
     /All 46 StartOS device-matrix cells remain \*\*NOT RUN\*\*/,

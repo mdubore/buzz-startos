@@ -61,9 +61,12 @@ matrix.
    `docs/testing/evidence/<candidate>/<architecture>/<gate-id>.json`.
 2. Set `example` to `false`; replace every example value with observed candidate,
    device, execution, state-hash, assertion, evidence, issue, and review data.
-3. Store sanitized attachments beside the record. Hash every attachment and
-   reference it by a unique evidence ID. Record commands as program and argument
-   arrays after redaction.
+3. Store sanitized attachments beside the record and reference them only by a
+   local relative `path`, never by a URL or absolute path. Hash every attachment
+   and reference it by a unique evidence ID. The validator resolves symlinks,
+   confines each file to the record directory, opens it, recomputes SHA-256, and
+   scans retained content for credentials. Record commands as program and
+   argument arrays only when no password, secret, or token argument is present.
 4. Use `pass` only when every required assertion in
    [`DEVICE_GATES.json`](DEVICE_GATES.json) passes, each assertion cites retained
    evidence, no high or critical issue is open, and the independent reviewer
@@ -140,10 +143,22 @@ rejected. Confirm StartOS actions never return service secrets.
 ### AUTH-02
 
 Create a synthetic channel with an active owner, admin, member, and unauthorized
-identity. Attempt a channel-role change as a non-admin and attempt to demote the
-owner. Both must be rejected without altering the owner set. Confirm every
-channel retains at least one active owner and ordinary authorized role management
-still succeeds. This gate specifically covers the authorization defect fixed
+identity. Preserve the non-admin role-change, owner-demotion, owner-set, and
+active-owner checks, then fill the structured `authorizationRegression.cases`
+matrix for event kinds `9030`, `9031`, `9032`, `9033`, `41010`, `41011`,
+`41012`, `30620`, `46020`, `46030`, and `46031`.
+
+For every listed kind, test owner, admin, and member identities under both an
+active ban and an active timeout. All 66 attempts must be rejected, produce no
+event write, return the same generic client error `request rejected`, and expose
+no raw database or SQL text. Then, as an owner authorized for the operation,
+test every kind after each expired restriction and again without a restriction.
+All 33 authorized attempts must succeed and persist the intended event. A role
+that is not otherwise authorized is not made authorized merely because a
+restriction expired.
+
+Retain sanitized client responses and before/after event identifiers or counts
+for every case. This gate specifically covers the authorization defect fixed
 upstream after the published `:2` package.
 
 ### MED-01
@@ -195,12 +210,27 @@ does not disclose tenant data or act as a fallback tenant.
 
 ### BKP-01
 
-Create and verify a StartOS backup after recording the state inventory. Restore it
-onto a clean target host of the same architecture with the original canonical
-address available. Confirm logical PostgreSQL restore, wrapper state, Redis
-continuity, media, identities, and stable secrets are preserved. Confirm the
-excluded Git cache is rebuilt from MinIO and compare the full restored inventory.
-Also confirm the source service restarts after backup.
+Create and verify a StartOS backup after recording the state inventory. The
+official StartOS 0.4.0 documentation says
+[backup archives are architecture-specific](https://github.com/Start9Labs/start-technologies/blob/start-os/v0.4.0/projects/start-os/docs/src/backup-create.md)
+but [restore across architectures is supported](https://github.com/Start9Labs/start-technologies/blob/start-os/v0.4.0/projects/start-os/docs/src/backup-restore.md);
+cross-architecture services should then be reinstalled, not uninstalled, to use
+their native package.
+
+Record all four structured trials in each `BKP-01` record:
+
+- x86_64 source to x86_64 target
+- aarch64 source to aarch64 target
+- x86_64 source to aarch64 target
+- aarch64 source to x86_64 target
+
+For every source and clean target, record architecture, model, CPU, core count,
+memory, storage, StartOS build ID, and StartOS image SHA-256. Cross-architecture
+trials must reinstall the frozen candidate's native target package before Buzz
+validation. Confirm logical PostgreSQL restore, wrapper state, Redis continuity,
+media, identities, stable secrets, and the original canonical address are
+preserved. Confirm the excluded Git cache is rebuilt from MinIO, compare the
+full restored inventory, and confirm the source service restarts after backup.
 
 Sanitize restore logs before retention because the accepted SDK has a sensitive
 error-diagnostic residual.
@@ -242,7 +272,21 @@ secret. Restore the verified backup and compare state after recovery.
 ### UPG-01
 
 Use only synthetic data on a network-isolated source device installed from the
-published revision `:2`. Complete
+exact published revision `:2` identity:
+
+- tag `v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2`
+- version `0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2`
+- package commit `0103ba850c08ae84cca5c623ea76c855d7a7f1a4`
+- upstream commit `dd222a509b156ba52ed3219e895d7bf1cf322c92`
+- signer `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c`
+- x86_64 archive SHA-256
+  `8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2`
+- aarch64 archive SHA-256
+  `72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638`
+
+Record the architecture-matched values in `upgradeSource`; the validator rejects
+any other identity or artifact and rejects `upgradeSource` on other gates.
+Complete
 [`PRE_UPGRADE_AUDIT.md`](../operations/PRE_UPGRADE_AUDIT.md), obtain operator
 approval, and verify a rollback backup before updating to the candidate. Confirm
 the new version, stable state, client data, canonical URL, and identities are
@@ -276,9 +320,10 @@ issues. Compare candidate identity across every record, run
 one last time. The strict command rejects `UNFROZEN` candidates and every
 `NOT RUN`, `FAIL`, `BLOCKED`, unlinked, stale, mismatched, or unreviewed cell.
 
-The release process must also enforce authenticated operator/reviewer binding
-outside the self-asserted JSON record. Set
-`promotionControls.authenticatedOperatorReviewerBinding` to `ENFORCED` only
-after that release control is active and auditable. It remains `PENDING` during
-pre-release documentation work, and strict promotion fails closed while it is
-pending.
+The repository does not yet have a protected evidence workflow that can bind
+authenticated operator and reviewer identities, immutable run IDs/URLs, and
+retained attachment IDs to each record. A self-asserted JSON flag cannot provide
+that authentication. `authenticatedOperatorReviewerBinding` therefore remains
+`PENDING`, and promotion is disabled until authenticated binding is implemented
+and machine-verifiable. Do not manually change this field to claim enforcement;
+the candidate loader rejects that shortcut.

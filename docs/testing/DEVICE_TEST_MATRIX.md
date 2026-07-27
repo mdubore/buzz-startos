@@ -8,8 +8,10 @@ tested device version or a substitute for device evidence.
 
 ## Candidate Identity
 
-Task 9 freezes these values before any device run. Every evidence record for a
-candidate must repeat the same values and match its release assets.
+[`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is authoritative. Task 9
+freezes its package, per-architecture artifact, and per-architecture StartOS
+image values before any device run. Every evidence record must exactly match
+that contract.
 
 | Field                | Required value                                                            |
 | -------------------- | ------------------------------------------------------------------------- |
@@ -20,6 +22,8 @@ candidate must repeat the same values and match its release assets.
 | Release signer       | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
 | x86_64 artifact      | Pending `buzz_x86_64.s9pk` size and SHA-256                               |
 | aarch64 artifact     | Pending `buzz_aarch64.s9pk` size and SHA-256                              |
+| StartOS source       | `start-os/v0.4.0` at `514af0c2fa076c8b597d9861f882bdb1b3411d9e`          |
+| StartOS images       | Pending observed x86_64 and aarch64 build IDs and image SHA-256 hashes    |
 
 Changing a package, image, source, version, signature, or archive byte creates a
 new candidate and resets every result. Evidence may be committed after the
@@ -74,8 +78,10 @@ npm run verify:device-evidence
 
 Evidence records include the native archive identity, stable StartOS build,
 device hardware, commands, client versions, timestamps, before/after state
-hashes, sanitized attachments, issues, and independent review. The example is
-only a schema template and does not complete a cell.
+hashes, sanitized local attachments, issues, and independent review. The
+validator opens each attachment, enforces directory containment, recomputes its
+SHA-256, and scans it for credentials. The example is only a schema template and
+does not complete a cell.
 
 Never retain private keys, database/Redis/MinIO credentials, relay signing
 material, HMAC secrets, authentication headers, database dumps, or unredacted
@@ -86,4 +92,7 @@ restore error argv/log output.
 Promotion requires valid linked evidence in all 46 cells, identical release
 identity across those records, no open high or critical issue, successful
 pre-upgrade audits, physical-device resource reports, and independent approval.
-The immutable assets tested here are the only assets that may be promoted.
+The immutable assets tested here are the only assets that may be promoted. Run
+`npm run verify:device-promotion` for the strict check. Promotion remains
+disabled until a protected evidence workflow provides machine-verifiable
+authenticated operator/reviewer binding.

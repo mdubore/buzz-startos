@@ -95,7 +95,13 @@
         "authorization.non-admin-role-change-rejected",
         "authorization.owner-demotion-rejected",
         "authorization.owner-set-preserved",
-        "authorization.active-owner-per-channel"
+        "authorization.active-owner-per-channel",
+        "authorization.restricted-kind-matrix",
+        "authorization.expired-restriction-path",
+        "authorization.allowed-authorized-path",
+        "authorization.no-write-on-rejection",
+        "authorization.stable-generic-error",
+        "authorization.no-raw-database-text"
       ],
       "destructive": false,
       "requiresPhysicalHardware": false
@@ -205,7 +211,11 @@
         "restore.clean-host",
         "restore.postgres-logical",
         "restore.state-preserved",
-        "restore.git-cache-hydrated"
+        "restore.git-cache-hydrated",
+        "restore.same-architecture",
+        "restore.cross-architecture-x86-to-aarch64",
+        "restore.cross-architecture-aarch64-to-x86",
+        "restore.native-package-reinstalled"
       ],
       "destructive": true,
       "requiresPhysicalHardware": false
@@ -291,6 +301,7 @@
         "upgrade.backup-verified",
         "upgrade.completed",
         "upgrade.version",
+        "upgrade.source-identity",
         "upgrade.state-preserved",
         "upgrade.authorization-fixed",
         "upgrade.no-arbitrary-owner-repair"

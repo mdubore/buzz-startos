@@ -10,6 +10,10 @@
       [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md),
       filling all 46 cells with independently reviewed real-device and artifact
       evidence only.
+- [ ] Implement a protected evidence workflow that records authenticated,
+      distinct operator/reviewer identities plus immutable workflow run and
+      attachment IDs, verify that provenance in `verify:device-promotion`, and
+      only then replace the fail-closed `PENDING` binding contract.
 - [ ] Run
       [`PRE_UPGRADE_AUDIT.md`](docs/operations/PRE_UPGRADE_AUDIT.md) and
       `UPG-01` from the exact published `:2` artifacts on both architectures.
