@@ -3,6 +3,11 @@
 Your first setup choice is permanent: the selected StartOS URL identifies this
 Buzz community and is used in authentication, media, and Git links.
 
+> [!WARNING]
+> This sideload tracks a Buzz development snapshot. Backup and restore have not
+> been validated on real StartOS devices. Do not use this package as the only
+> copy of irreplaceable data.
+
 ## Documentation
 
 - [Upstream Buzz documentation](https://github.com/block/buzz#readme) -
@@ -52,9 +57,10 @@ aliases for the canonical URL selected during setup. If that original address
 is unavailable after a restore or gateway change, Buzz stays blocked until the
 same address is restored.
 
-Create a StartOS backup before applying an update. Backups preserve the
-database, object storage, wrapper state, Redis continuity data, canonical URL,
-owner identity, and stable service secrets.
+Create a StartOS backup before applying an update. The package is designed to
+preserve the database, object storage, wrapper state, Redis continuity data,
+canonical URL, owner identity, and stable service secrets, but this behavior
+has not yet been proven by a restore on a real StartOS device.
 
 ## Limitations
 
