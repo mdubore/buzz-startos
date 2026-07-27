@@ -16,8 +16,8 @@ Buzz community and is used in authentication, media, and Git links.
 3. Select the StartOS URL that you intend to keep for this community.
 4. Complete the task, then start Buzz.
 5. Run **Connection Information** and copy the **Relay WebSocket URL**.
-6. Configure the external Buzz desktop client with that relay URL and
-   authenticate using the private key that matches the stored owner public
+6. Install the external Buzz desktop client, configure it with that relay URL,
+   and authenticate using the private key that matches the stored owner public
    key.
 
 Enter only the public `npub` or hex key in StartOS. Never enter an `nsec` or

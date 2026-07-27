@@ -11,27 +11,36 @@ and a reviewed pull request.
 
 ## 1. Fast-Forward The Source Mirror
 
-Run from the packaging workspace. The expected `buzz9` remotes are:
+Run from the `buzz-startos` package root. The expected `buzz9` remotes are:
 
 ```text
 origin   https://github.com/mdubore/buzz9.git
 upstream https://github.com/block/buzz.git
 ```
 
-Fetch both remotes, incorporate only a fast-forward from `origin`, prove the
-fork is an ancestor of upstream, and then accept only an upstream
-fast-forward:
+Read the currently packaged commit before entering or changing the source
+mirror. Then fetch both remotes, prove that the package baseline and fork are
+ancestors of upstream, incorporate only a fast-forward from `origin`, and
+accept only an upstream fast-forward:
 
 ```bash
+test -f startos/image-pins.ts
+old_sha="$(
+  sed -nE "s/^  commit: '([0-9a-f]{40})',$/\1/p" startos/image-pins.ts
+)"
+[[ "$old_sha" =~ ^[0-9a-f]{40}$ ]]
+printf 'package baseline=%s\n' "$old_sha"
+
 cd ../buzz9
 git status --short --branch
 git remote -v
 git fetch --prune origin main
 git fetch --prune upstream main
+git cat-file -e "$old_sha^{commit}"
+git merge-base --is-ancestor "$old_sha" upstream/main
 git switch main
 git pull --ff-only origin main
 
-old_sha="$(git rev-parse HEAD)"
 git merge-base --is-ancestor origin/main upstream/main
 read -r ahead behind < <(
   git rev-list --left-right --count main...upstream/main
@@ -42,6 +51,7 @@ test "$ahead" -eq 0
 git merge --ff-only upstream/main
 new_sha="$(git rev-parse HEAD)"
 test "$old_sha" != "$new_sha"
+git merge-base --is-ancestor "$old_sha" "$new_sha"
 
 git push origin main
 git fetch --prune origin main
