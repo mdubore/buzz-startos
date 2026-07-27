@@ -37,8 +37,119 @@ jobs:
     with:
       signed_release: true
 
-  finalize-prerelease:
+  signed-build:
     needs: signed-package
+    runs-on: ubuntu-24.04
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86, arm]
+        include:
+          - target: x86
+            archive: buzz_x86_64.s9pk
+            artifact: buzz-x86
+          - target: arm
+            archive: buzz_aarch64.s9pk
+            artifact: buzz-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install packaging prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ca-certificates \
+            curl \
+            git \
+            jq \
+            make \
+            openssl \
+            squashfs-tools \
+            squashfs-tools-ng \
+            xxd
+          command -v mksquashfs
+          command -v tar2sqfs
+          command -v openssl
+          command -v xxd
+
+      - name: Install Start CLI 1.1.0
+        run: |
+          START_CLI_TMP="$(mktemp)"
+          trap 'rm -f "$START_CLI_TMP"' EXIT
+          curl -fL \
+            'https://github.com/Start9Labs/start-technologies/releases/download/start-cli/v1.1.0/start-cli_x86_64-linux' \
+            -o "$START_CLI_TMP"
+          printf '%s  %s\n' \
+            '70eff67b6e9a936acd8aaaf787b783819252ecedaa5c74d462e3b15ed4dd843a' \
+            "$START_CLI_TMP" | sha256sum --check
+          sudo install -Dm755 "$START_CLI_TMP" /usr/local/bin/start-cli
+          test "$(start-cli --version)" = 'start-cli 1.1.0'
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Compile package entrypoint
+        run: npm run build
+
+      - name: Provision protected signing identity
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          test -n "${DEV_KEY:-}"
+          umask 077
+          mkdir -p "$HOME/.startos" "$GITHUB_WORKSPACE/.startos"
+          chmod 0700 "$HOME/.startos" "$GITHUB_WORKSPACE/.startos"
+          printf '%s' "$DEV_KEY" > "$HOME/.startos/id.key.pem"
+          cp \
+            "$HOME/.startos/id.key.pem" \
+            "$GITHUB_WORKSPACE/.startos/build.key.pem"
+          chmod 0600 \
+            "$HOME/.startos/id.key.pem" \
+            "$GITHUB_WORKSPACE/.startos/build.key.pem"
+
+      - name: Build signed ${{ matrix.target }} package
+        run: make "${{ matrix.target }}"
+
+      - name: Verify package output
+        run: |
+          shopt -s nullglob
+          archives=(*.s9pk)
+          test "${#archives[@]}" -eq 1
+          test "${archives[0]}" = '${{ matrix.archive }}'
+          test -s '${{ matrix.archive }}'
+
+      - name: Verify package signer
+        run: ./scripts/verify-s9pk-signer.sh '${{ matrix.archive }}'
+
+      - name: Print package checksum
+        run: sha256sum -- '${{ matrix.archive }}'
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Remove protected signing identity
+        if: ${{ always() }}
+        run: |
+          rm -f \
+            "$HOME/.startos/id.key.pem" \
+            "$GITHUB_WORKSPACE/.startos/build.key.pem"
+          rmdir "$HOME/.startos" "$GITHUB_WORKSPACE/.startos" 2>/dev/null || true
+
+  finalize-prerelease:
+    needs: signed-build
     runs-on: ubuntu-24.04
     permissions:
       contents: write

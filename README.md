@@ -342,9 +342,10 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
   serialization, backup policy, and release workflow policy.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
-- Signed x86_64 and aarch64 `:0` candidates were built and statically inspected
-  at package commit `cefe017`. They were not published, and the `:1` workflow
-  and metadata commit makes them non-final.
+- Signed x86_64 and aarch64 `:1` candidates were built and statically inspected
+  at package commit `fd4ab4d`. The protected CI run failed closed before its
+  signed builds, so no release assets were published; the `:2` workflow and
+  metadata commit makes the local candidates non-final.
 - No StartOS device matrix item has been completed. Install, client, media,
   Git, restart, failure, backup/restore, and resource behavior remain unproven
   on both architectures.

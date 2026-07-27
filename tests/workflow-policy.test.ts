@@ -25,35 +25,35 @@ const workflowJob = (workflow: string, jobId: string): string => {
   return lines.slice(start, next === -1 ? undefined : next).join('\n')
 }
 
-test('reusable package workflow declares the protected signing secret', () => {
-  assert.ok(
-    packageWorkflow.includes(
-      [
-        '    secrets:',
-        '      DEV_KEY:',
-        '        description: Protected release signing key supplied by the release environment',
-        '        required: false',
-      ].join('\n'),
-    ),
-  )
+test('reusable package workflow never accepts the protected signing secret', () => {
+  assert.doesNotMatch(packageWorkflow, /\bDEV_KEY\b/)
+  assert.doesNotMatch(packageWorkflow, /^  signed-build:$/m)
 })
 
-test('signed builds obtain the declared secret only through the release environment', () => {
-  const signedBuild = workflowJob(packageWorkflow, 'signed-build')
-  const unsignedJobs = [
+test('only the top-level release job obtains the protected signing secret', () => {
+  const signedBuild = workflowJob(releaseWorkflow, 'signed-build')
+  const finalizer = workflowJob(releaseWorkflow, 'finalize-prerelease')
+  const unprotectedJobs = [
     workflowJob(packageWorkflow, 'verify'),
     workflowJob(packageWorkflow, 'ephemeral-build'),
+    workflowJob(releaseWorkflow, 'preflight'),
+    workflowJob(releaseWorkflow, 'signed-package'),
+    finalizer,
   ]
 
+  assert.match(signedBuild, /\n    needs: signed-package\n/)
   assert.match(signedBuild, /\n    environment: release\n/)
   assert.match(signedBuild, /DEV_KEY: \$\{\{ secrets\.DEV_KEY \}\}/)
-  assert.equal(packageWorkflow.match(/secrets\.DEV_KEY/g)?.length, 1)
-  for (const unsignedJob of unsignedJobs) {
-    assert.doesNotMatch(unsignedJob, /\benvironment: release\b/)
-    assert.doesNotMatch(unsignedJob, /\bDEV_KEY\b/)
+  assert.match(finalizer, /\n    needs: signed-build\n/)
+  assert.equal(releaseWorkflow.match(/secrets\.DEV_KEY/g)?.length, 1)
+  for (const unprotectedJob of unprotectedJobs) {
+    assert.doesNotMatch(unprotectedJob, /\benvironment: release\b/)
+    assert.doesNotMatch(unprotectedJob, /\bDEV_KEY\b/)
   }
   assert.doesNotMatch(buildWorkflow, /\bsecrets:/)
   assert.doesNotMatch(buildWorkflow, /\bDEV_KEY\b/)
-  assert.doesNotMatch(releaseWorkflow, /\bsecrets:/)
-  assert.doesNotMatch(releaseWorkflow, /\bDEV_KEY\b/)
+  assert.doesNotMatch(
+    workflowJob(releaseWorkflow, 'signed-package'),
+    /\bsecrets:/,
+  )
 })
