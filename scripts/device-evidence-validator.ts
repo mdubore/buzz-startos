@@ -12,6 +12,13 @@ const DEFAULT_CATALOG = new URL(
   '../docs/testing/DEVICE_GATES.json',
   import.meta.url,
 )
+const DEFAULT_CANDIDATE = new URL(
+  '../docs/testing/DEVICE_CANDIDATE.json',
+  import.meta.url,
+)
+const OFFICIAL_STARTOS_SOURCE =
+  'https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0'
+const OFFICIAL_STARTOS_COMMIT = '514af0c2fa076c8b597d9861f882bdb1b3411d9e'
 
 const FORBIDDEN_SENSITIVE_VALUES = [
   /\bnsec1[023456789acdefghjklmnpqrstuvwxyz]+\b/i,
@@ -23,6 +30,53 @@ const FORBIDDEN_SENSITIVE_VALUES = [
 ] as const
 
 type Architecture = keyof typeof ARCHIVES
+
+type CandidateArtifact = {
+  name: string
+  sha256: string | null
+  sizeBytes: number | null
+}
+
+type UpgradeArtifact = {
+  name: string
+  sha256: string
+}
+
+export type CandidateContract = {
+  schemaVersion: 1
+  state: 'UNFROZEN' | 'FROZEN'
+  startos: {
+    releaseLine: '0.4.0'
+    releaseTag: 'start-os/v0.4.0'
+    sourceUrl: string
+    sourceCommit: string
+    architectures: Record<
+      Architecture,
+      { buildId: string | null; imageSha256: string | null }
+    >
+  }
+  package: {
+    tag: string | null
+    version: string | null
+    packageCommit: string | null
+    upstreamCommit: string | null
+    signerFingerprint: string
+    manifestMinimumStartos: '0.4.0-beta.10'
+    sdkVersion: string
+    artifacts: Record<Architecture, CandidateArtifact>
+  }
+  upgradeSource: {
+    tag: string
+    version: string
+    packageCommit: string
+    upstreamCommit: string
+    signerFingerprint: string
+    artifacts: Record<Architecture, UpgradeArtifact>
+  }
+  promotionControls: {
+    authenticatedOperatorReviewerBinding: 'PENDING' | 'ENFORCED'
+  }
+}
 
 export type Gate = {
   id: string
@@ -65,6 +119,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isSchema = (value: unknown): value is AnySchema =>
   typeof value === 'boolean' || isRecord(value)
+
+const isSha256 = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+
+const isFingerprint = (value: unknown): value is string =>
+  typeof value === 'string' && /^sha256:[0-9a-f]{64}$/.test(value)
+
+const isCommit = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9a-f]{40}$/.test(value)
 
 const parseJson = async (path: URL): Promise<unknown> =>
   JSON.parse(await readFile(path, 'utf8')) as unknown
@@ -245,6 +308,186 @@ export async function loadGateCatalog(path: URL): Promise<GateCatalog> {
   return catalog
 }
 
+function candidateContractErrors(value: unknown): string[] {
+  if (!isRecord(value)) return ['candidate contract must be an object']
+
+  const errors: string[] = []
+  const startos = isRecord(value.startos) ? value.startos : {}
+  const architectures = isRecord(startos.architectures)
+    ? startos.architectures
+    : {}
+  const packageIdentity = isRecord(value.package) ? value.package : {}
+  const artifacts = isRecord(packageIdentity.artifacts)
+    ? packageIdentity.artifacts
+    : {}
+  const upgradeSource = isRecord(value.upgradeSource) ? value.upgradeSource : {}
+  const upgradeArtifacts = isRecord(upgradeSource.artifacts)
+    ? upgradeSource.artifacts
+    : {}
+  const promotionControls = isRecord(value.promotionControls)
+    ? value.promotionControls
+    : {}
+
+  if (value.schemaVersion !== 1)
+    errors.push('candidate schemaVersion must be 1')
+  if (value.state !== 'UNFROZEN' && value.state !== 'FROZEN') {
+    errors.push('candidate state must be UNFROZEN or FROZEN')
+  }
+  if (
+    startos.releaseLine !== '0.4.0' ||
+    startos.releaseTag !== 'start-os/v0.4.0' ||
+    startos.sourceUrl !== OFFICIAL_STARTOS_SOURCE ||
+    startos.sourceCommit !== OFFICIAL_STARTOS_COMMIT
+  ) {
+    errors.push('candidate must identify the official StartOS 0.4.0 lineage')
+  }
+
+  for (const architecture of ['x86_64', 'aarch64'] as const) {
+    const startosIdentity = isRecord(architectures[architecture])
+      ? architectures[architecture]
+      : {}
+    const artifact = isRecord(artifacts[architecture])
+      ? artifacts[architecture]
+      : {}
+    const upgradeArtifact = isRecord(upgradeArtifacts[architecture])
+      ? upgradeArtifacts[architecture]
+      : {}
+
+    if (
+      startosIdentity.buildId !== null &&
+      typeof startosIdentity.buildId !== 'string'
+    ) {
+      errors.push(`candidate StartOS ${architecture} buildId is invalid`)
+    }
+    if (
+      startosIdentity.imageSha256 !== null &&
+      !isSha256(startosIdentity.imageSha256)
+    ) {
+      errors.push(`candidate StartOS ${architecture} imageSha256 is invalid`)
+    }
+    if (artifact.name !== ARCHIVES[architecture]) {
+      errors.push(`candidate ${architecture} archive name is invalid`)
+    }
+    if (artifact.sha256 !== null && !isSha256(artifact.sha256)) {
+      errors.push(`candidate ${architecture} archive SHA-256 is invalid`)
+    }
+    if (
+      artifact.sizeBytes !== null &&
+      (!Number.isInteger(artifact.sizeBytes) ||
+        (artifact.sizeBytes as number) < 1)
+    ) {
+      errors.push(`candidate ${architecture} archive size is invalid`)
+    }
+    if (
+      upgradeArtifact.name !== ARCHIVES[architecture] ||
+      !isSha256(upgradeArtifact.sha256)
+    ) {
+      errors.push(`upgrade source ${architecture} artifact is invalid`)
+    }
+  }
+
+  if (
+    packageIdentity.tag !== null &&
+    (typeof packageIdentity.tag !== 'string' ||
+      !/^v[^\s]+_[0-9]+$/.test(packageIdentity.tag))
+  ) {
+    errors.push('candidate package tag is invalid')
+  }
+  if (
+    packageIdentity.version !== null &&
+    (typeof packageIdentity.version !== 'string' ||
+      !/^[^\s]+:[0-9]+$/.test(packageIdentity.version))
+  ) {
+    errors.push('candidate package version is invalid')
+  }
+  if (
+    packageIdentity.packageCommit !== null &&
+    !isCommit(packageIdentity.packageCommit)
+  ) {
+    errors.push('candidate package commit is invalid')
+  }
+  if (
+    packageIdentity.upstreamCommit !== null &&
+    !isCommit(packageIdentity.upstreamCommit)
+  ) {
+    errors.push('candidate upstream commit is invalid')
+  }
+  if (!isFingerprint(packageIdentity.signerFingerprint)) {
+    errors.push('candidate signer fingerprint is invalid')
+  }
+  if (packageIdentity.manifestMinimumStartos !== '0.4.0-beta.10') {
+    errors.push('candidate manifest minimum StartOS is invalid')
+  }
+  if (
+    typeof packageIdentity.sdkVersion !== 'string' ||
+    !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(packageIdentity.sdkVersion)
+  ) {
+    errors.push('candidate SDK version is invalid')
+  }
+
+  if (
+    typeof upgradeSource.tag !== 'string' ||
+    typeof upgradeSource.version !== 'string' ||
+    !isCommit(upgradeSource.packageCommit) ||
+    !isCommit(upgradeSource.upstreamCommit) ||
+    !isFingerprint(upgradeSource.signerFingerprint)
+  ) {
+    errors.push('upgrade source identity is invalid')
+  }
+  if (
+    promotionControls.authenticatedOperatorReviewerBinding !== 'PENDING' &&
+    promotionControls.authenticatedOperatorReviewerBinding !== 'ENFORCED'
+  ) {
+    errors.push('candidate promotion control state is invalid')
+  }
+
+  const frozenValues = [
+    packageIdentity.tag,
+    packageIdentity.version,
+    packageIdentity.packageCommit,
+    packageIdentity.upstreamCommit,
+    ...(['x86_64', 'aarch64'] as const).flatMap((architecture) => {
+      const startosIdentity = isRecord(architectures[architecture])
+        ? architectures[architecture]
+        : {}
+      const artifact = isRecord(artifacts[architecture])
+        ? artifacts[architecture]
+        : {}
+      return [
+        startosIdentity.buildId,
+        startosIdentity.imageSha256,
+        artifact.sha256,
+        artifact.sizeBytes,
+      ]
+    }),
+  ]
+  if (
+    value.state === 'FROZEN' &&
+    frozenValues.some((candidateValue) => candidateValue === null)
+  ) {
+    errors.push('FROZEN candidate identity must be complete')
+  }
+  if (
+    value.state === 'UNFROZEN' &&
+    frozenValues.some((candidateValue) => candidateValue !== null)
+  ) {
+    errors.push('UNFROZEN candidate identity must not contain frozen values')
+  }
+
+  return errors
+}
+
+export async function loadCandidateContract(
+  path: URL,
+): Promise<CandidateContract> {
+  const parsed = await parseJson(path)
+  const errors = candidateContractErrors(parsed)
+  if (errors.length > 0) {
+    throw new Error(`invalid device candidate contract: ${errors.join('; ')}`)
+  }
+  return parsed as CandidateContract
+}
+
 async function schemaErrors(
   document: unknown,
   schemaPath: URL,
@@ -262,6 +505,7 @@ async function schemaErrors(
 function customEvidenceErrors(
   document: unknown,
   catalog: GateCatalog,
+  candidate: CandidateContract,
 ): string[] {
   if (!isRecord(document)) return ['evidence record must be an object']
   const errors = collectSensitiveErrors(document)
@@ -323,7 +567,9 @@ function customEvidenceErrors(
 
   if (
     typeof execution.operator === 'string' &&
-    execution.operator === review.reviewer
+    typeof review.reviewer === 'string' &&
+    execution.operator.toLocaleLowerCase() ===
+      review.reviewer.toLocaleLowerCase()
   ) {
     errors.push('device evidence requires an independent reviewer')
   }
@@ -409,20 +655,130 @@ function customEvidenceErrors(
     errors.push('RES-01 requires representative physical hardware')
   }
 
+  if (document.example !== true) {
+    if (candidate.state !== 'FROZEN') {
+      errors.push('production evidence rejected because candidate is UNFROZEN')
+      return errors
+    }
+
+    if (architecture === 'x86_64' || architecture === 'aarch64') {
+      const candidateArtifact = candidate.package.artifacts[architecture]
+      const candidateStartos = candidate.startos.architectures[architecture]
+      const comparisons: Array<[string, unknown, unknown]> = [
+        ['releaseCandidate.tag', releaseCandidate.tag, candidate.package.tag],
+        [
+          'releaseCandidate.packageVersion',
+          releaseCandidate.packageVersion,
+          candidate.package.version,
+        ],
+        [
+          'releaseCandidate.packageCommit',
+          releaseCandidate.packageCommit,
+          candidate.package.packageCommit,
+        ],
+        [
+          'releaseCandidate.upstreamCommit',
+          releaseCandidate.upstreamCommit,
+          candidate.package.upstreamCommit,
+        ],
+        [
+          'releaseCandidate.signerFingerprint',
+          releaseCandidate.signerFingerprint,
+          candidate.package.signerFingerprint,
+        ],
+        [
+          'releaseCandidate.manifestMinimumStartos',
+          releaseCandidate.manifestMinimumStartos,
+          candidate.package.manifestMinimumStartos,
+        ],
+        [
+          'releaseCandidate.sdkVersion',
+          releaseCandidate.sdkVersion,
+          candidate.package.sdkVersion,
+        ],
+        ['releaseCandidate.archive.name', archive.name, candidateArtifact.name],
+        [
+          'releaseCandidate.archive.sha256',
+          archive.sha256,
+          candidateArtifact.sha256,
+        ],
+        [
+          'releaseCandidate.archive.sizeBytes',
+          archive.sizeBytes,
+          candidateArtifact.sizeBytes,
+        ],
+        [
+          'device.startos.releaseLine',
+          startos.releaseLine,
+          candidate.startos.releaseLine,
+        ],
+        [
+          'device.startos.releaseTag',
+          startos.releaseTag,
+          candidate.startos.releaseTag,
+        ],
+        [
+          'device.startos.officialSource',
+          startos.officialSource,
+          candidate.startos.sourceUrl,
+        ],
+        [
+          'device.startos.sourceCommit',
+          startos.sourceCommit,
+          candidate.startos.sourceCommit,
+        ],
+        ['device.startos.buildId', startos.buildId, candidateStartos.buildId],
+        [
+          'device.startos.imageSha256',
+          startos.imageSha256,
+          candidateStartos.imageSha256,
+        ],
+      ]
+
+      for (const [field, observed, expected] of comparisons) {
+        if (observed !== expected) {
+          errors.push(`${field} does not match the frozen candidate`)
+        }
+      }
+    }
+  }
+
   return errors
 }
 
 export async function validateEvidenceFile(
   path: URL,
   schemaPath: URL,
+  options: {
+    candidatePath?: URL
+    allowFixtureOverlay?: boolean
+  } = {},
 ): Promise<ValidationResult> {
-  const document = await loadEvidenceDocument(path)
-  const catalog = await loadGateCatalog(DEFAULT_CATALOG)
-  const errors = [
-    ...(await schemaErrors(document, schemaPath)),
-    ...customEvidenceErrors(document, catalog),
-  ]
-  return { valid: errors.length === 0, errors: [...new Set(errors)] }
+  try {
+    const rawDocument = await parseJson(path)
+    if (isOverlay(rawDocument) && options.allowFixtureOverlay !== true) {
+      return {
+        valid: false,
+        errors: ['production evidence cannot use fixture inheritance overlays'],
+      }
+    }
+
+    const document = await loadEvidenceDocument(path)
+    const [catalog, candidate] = await Promise.all([
+      loadGateCatalog(DEFAULT_CATALOG),
+      loadCandidateContract(options.candidatePath ?? DEFAULT_CANDIDATE),
+    ])
+    const errors = [
+      ...(await schemaErrors(document, schemaPath)),
+      ...customEvidenceErrors(document, catalog, candidate),
+    ]
+    return { valid: errors.length === 0, errors: [...new Set(errors)] }
+  } catch (error) {
+    return {
+      valid: false,
+      errors: [error instanceof Error ? error.message : String(error)],
+    }
+  }
 }
 
 function parseMatrixCell(value: string): MatrixCell | null {
@@ -467,15 +823,21 @@ function candidateIdentity(document: unknown): CandidateIdentity | null {
 }
 
 export async function validateRepository(options: {
+  candidatePath: URL
   catalogPath: URL
   examplePath: URL
   matrixPath: URL
+  mode?: 'template' | 'promotion'
   schemaPath: URL
 }): Promise<ValidationResult & { matrixCells: number }> {
   const errors: string[] = []
   let catalog: GateCatalog
+  let candidate: CandidateContract
   try {
-    catalog = await loadGateCatalog(options.catalogPath)
+    ;[catalog, candidate] = await Promise.all([
+      loadGateCatalog(options.catalogPath),
+      loadCandidateContract(options.candidatePath),
+    ])
   } catch (error) {
     return {
       valid: false,
@@ -487,6 +849,7 @@ export async function validateRepository(options: {
   const example = await validateEvidenceFile(
     options.examplePath,
     options.schemaPath,
+    { candidatePath: options.candidatePath },
   )
   errors.push(...example.errors.map((error) => `example: ${error}`))
 
@@ -527,6 +890,28 @@ export async function validateRepository(options: {
     }
   }
 
+  if (options.mode === 'promotion') {
+    if (candidate.state !== 'FROZEN') {
+      errors.push('promotion rejected because candidate is UNFROZEN')
+    }
+    if (
+      candidate.promotionControls.authenticatedOperatorReviewerBinding !==
+      'ENFORCED'
+    ) {
+      errors.push(
+        'promotion requires authenticated operator/reviewer binding to be ENFORCED',
+      )
+    }
+    const linkedPassCells = [...parsedCells.values()].filter(
+      ({ status, path }) => status === 'PASS' && path !== undefined,
+    ).length
+    if (matrixCells !== 46 || linkedPassCells !== 46) {
+      errors.push(
+        `promotion requires exactly 46 linked PASS cells; found ${linkedPassCells}`,
+      )
+    }
+  }
+
   let sharedCandidateIdentity: string | undefined
   const archiveIdentities = new Map<Architecture, string>()
   for (const gate of catalog.gates) {
@@ -552,6 +937,7 @@ export async function validateRepository(options: {
       const evidenceResult = await validateEvidenceFile(
         evidencePath,
         options.schemaPath,
+        { candidatePath: options.candidatePath },
       )
       errors.push(
         ...evidenceResult.errors.map(

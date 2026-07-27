@@ -16,9 +16,19 @@ type ValidationResult = {
 
 type MutableEvidenceFixture = {
   gateId: string
-  device: { architecture: string }
+  device: {
+    architecture: string
+    startos: {
+      buildId: string
+      imageSha256: string
+    }
+  }
   releaseCandidate: {
-    archive: { name: string }
+    archive: {
+      name: string
+      sha256: string
+      sizeBytes: number
+    }
     packageCommit: string
   }
   assertions: Array<{
@@ -32,13 +42,60 @@ type MutableEvidenceFixture = {
 
 type DeviceEvidenceValidator = {
   loadGateCatalog(path: URL): Promise<{
-    gates: Array<{ id: string; dependsOn: string[] }>
+    gates: Array<{
+      id: string
+      dependsOn: string[]
+      requiredAssertions: string[]
+    }>
   }>
-  validateEvidenceFile(path: URL, schemaPath: URL): Promise<ValidationResult>
+  loadCandidateContract(path: URL): Promise<{
+    schemaVersion: number
+    state: 'UNFROZEN' | 'FROZEN'
+    startos: {
+      releaseLine: string
+      releaseTag: string
+      sourceUrl: string
+      sourceCommit: string
+      architectures: Record<
+        'x86_64' | 'aarch64',
+        { buildId: string | null; imageSha256: string | null }
+      >
+    }
+    package: {
+      tag: string | null
+      version: string | null
+      packageCommit: string | null
+      upstreamCommit: string | null
+      signerFingerprint: string
+      manifestMinimumStartos: string
+      sdkVersion: string
+      artifacts: Record<
+        'x86_64' | 'aarch64',
+        {
+          name: string
+          sha256: string | null
+          sizeBytes: number | null
+        }
+      >
+    }
+    promotionControls: {
+      authenticatedOperatorReviewerBinding: 'PENDING' | 'ENFORCED'
+    }
+  }>
+  validateEvidenceFile(
+    path: URL,
+    schemaPath: URL,
+    options?: {
+      candidatePath?: URL
+      allowFixtureOverlay?: boolean
+    },
+  ): Promise<ValidationResult>
   validateRepository(options: {
+    candidatePath: URL
     catalogPath: URL
     examplePath: URL
     matrixPath: URL
+    mode?: 'template' | 'promotion'
     schemaPath: URL
   }): Promise<ValidationResult & { matrixCells: number }>
 }
@@ -62,6 +119,11 @@ const matrixPath = new URL(
   '../docs/testing/DEVICE_TEST_MATRIX.md',
   import.meta.url,
 )
+const candidatePath = new URL(
+  '../docs/testing/DEVICE_CANDIDATE.json',
+  import.meta.url,
+)
+const frozenCandidatePath = fixture('frozen-candidate.json')
 const gateIds = [
   'ART-01',
   'INS-01',
@@ -120,6 +182,39 @@ async function loadValidator(): Promise<DeviceEvidenceValidator> {
   return loaded
 }
 
+test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async () => {
+  const validator = await loadValidator()
+  const candidate = await validator.loadCandidateContract(candidatePath)
+
+  assert.equal(candidate.schemaVersion, 1)
+  assert.equal(candidate.state, 'UNFROZEN')
+  assert.deepEqual(candidate.startos, {
+    releaseLine: '0.4.0',
+    releaseTag: 'start-os/v0.4.0',
+    sourceUrl:
+      'https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0',
+    sourceCommit: '514af0c2fa076c8b597d9861f882bdb1b3411d9e',
+    architectures: {
+      x86_64: { buildId: null, imageSha256: null },
+      aarch64: { buildId: null, imageSha256: null },
+    },
+  })
+  assert.equal(
+    candidate.package.signerFingerprint,
+    'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
+  )
+  assert.equal(candidate.package.tag, null)
+  assert.equal(candidate.package.version, null)
+  assert.equal(candidate.package.packageCommit, null)
+  assert.equal(candidate.package.upstreamCommit, null)
+  assert.equal(candidate.package.artifacts.x86_64.sha256, null)
+  assert.equal(candidate.package.artifacts.aarch64.sha256, null)
+  assert.equal(
+    candidate.promotionControls.authenticatedOperatorReviewerBinding,
+    'PENDING',
+  )
+})
+
 test('defines the complete acyclic 46-cell production gate catalog', async () => {
   const validator = await loadValidator()
   const catalog = await validator.loadGateCatalog(catalogPath)
@@ -136,9 +231,25 @@ test('accepts a complete independently reviewed stable StartOS record', async ()
   const result = await validator.validateEvidenceFile(
     fixture('valid-artifact.json'),
     schemaPath,
+    { candidatePath: frozenCandidatePath },
   )
 
   assert.deepEqual(result, { valid: true, errors: [] })
+})
+
+test('rejects production evidence while the repository candidate is unfrozen', async () => {
+  const validator = await loadValidator()
+  const result = await validator.validateEvidenceFile(
+    fixture('valid-artifact.json'),
+    schemaPath,
+    { candidatePath },
+  )
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) => error.includes('candidate is UNFROZEN')),
+    result.errors.join('\n'),
+  )
 })
 
 for (const [name, expectedError] of [
@@ -154,6 +265,10 @@ for (const [name, expectedError] of [
     const result = await validator.validateEvidenceFile(
       fixture(name),
       schemaPath,
+      {
+        candidatePath: frozenCandidatePath,
+        allowFixtureOverlay: true,
+      },
     )
 
     assert.equal(result.valid, false)
@@ -169,6 +284,7 @@ test('returns validation errors instead of throwing for malformed evidence', asy
   const result = await validator.validateEvidenceFile(
     fixture('invalid-shape.json'),
     schemaPath,
+    { candidatePath: frozenCandidatePath },
   )
 
   assert.equal(result.valid, false)
@@ -178,6 +294,7 @@ test('returns validation errors instead of throwing for malformed evidence', asy
 test('validates the template and keeps all 46 production cells NOT RUN', async () => {
   const validator = await loadValidator()
   const result = await validator.validateRepository({
+    candidatePath,
     catalogPath,
     examplePath,
     matrixPath,
@@ -220,6 +337,7 @@ test('rejects linked records from different release candidates', async (t) => {
   await writeFile(temporaryMatrix, matrix)
 
   const result = await validator.validateRepository({
+    candidatePath: frozenCandidatePath,
     catalogPath,
     examplePath,
     matrixPath: pathToFileURL(temporaryMatrix),
@@ -266,6 +384,7 @@ test('rejects a passed gate whose dependency has not passed', async (t) => {
   )
 
   const result = await validator.validateRepository({
+    candidatePath: frozenCandidatePath,
     catalogPath,
     examplePath,
     matrixPath: pathToFileURL(temporaryMatrix),
@@ -281,6 +400,103 @@ test('rejects a passed gate whose dependency has not passed', async (t) => {
   )
 })
 
+test('promotion rejects the unfrozen 46-cell template', async () => {
+  const validator = await loadValidator()
+  const result = await validator.validateRepository({
+    candidatePath,
+    catalogPath,
+    examplePath,
+    matrixPath,
+    mode: 'promotion',
+    schemaPath,
+  })
+
+  assert.equal(result.valid, false)
+  assert.ok(
+    result.errors.some((error) => error.includes('candidate is UNFROZEN')),
+    result.errors.join('\n'),
+  )
+  assert.ok(
+    result.errors.some((error) =>
+      error.includes('promotion requires exactly 46 linked PASS cells'),
+    ),
+    result.errors.join('\n'),
+  )
+})
+
+test('promotion accepts exactly 46 linked records for one frozen candidate', async (t) => {
+  const validator = await loadValidator()
+  const catalog = await validator.loadGateCatalog(catalogPath)
+  const candidate = await validator.loadCandidateContract(frozenCandidatePath)
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-device-promotion-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  const base = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  const cells: Record<string, { x86_64?: string; aarch64?: string }> = {}
+  const writes: Array<Promise<void>> = []
+
+  for (const gate of catalog.gates) {
+    cells[gate.id] = {}
+    for (const architecture of ['x86_64', 'aarch64'] as const) {
+      const record = structuredClone(base)
+      const artifact = candidate.package.artifacts[architecture]
+      const startos = candidate.startos.architectures[architecture]
+      const archiveSha256 = artifact.sha256
+      const archiveSizeBytes = artifact.sizeBytes
+      const startosBuildId = startos.buildId
+      const startosImageSha256 = startos.imageSha256
+      if (
+        archiveSha256 === null ||
+        archiveSizeBytes === null ||
+        startosBuildId === null ||
+        startosImageSha256 === null
+      ) {
+        assert.fail('frozen fixture candidate must be complete')
+      }
+
+      record.gateId = gate.id
+      record.device.architecture = architecture
+      record.device.startos.buildId = startosBuildId
+      record.device.startos.imageSha256 = startosImageSha256
+      record.releaseCandidate.archive = {
+        name: artifact.name,
+        sha256: archiveSha256,
+        sizeBytes: archiveSizeBytes,
+      }
+      record.assertions = gate.requiredAssertions.map((id) => ({
+        id,
+        expected: 'Fixture expectation',
+        observed: 'Fixture observation',
+        outcome: 'pass',
+        evidenceIds: ['artifact-verification'],
+      }))
+
+      const fileName = `${gate.id.toLowerCase()}-${architecture}.json`
+      cells[gate.id][architecture] = `[PASS](${fileName})`
+      writes.push(
+        writeFile(join(directory, fileName), JSON.stringify(record, null, 2)),
+      )
+    }
+  }
+
+  await Promise.all(writes)
+  const temporaryMatrix = join(directory, 'DEVICE_TEST_MATRIX.md')
+  await writeFile(temporaryMatrix, matrixFixture(cells))
+
+  const result = await validator.validateRepository({
+    candidatePath: frozenCandidatePath,
+    catalogPath,
+    examplePath,
+    matrixPath: pathToFileURL(temporaryMatrix),
+    mode: 'promotion',
+    schemaPath,
+  })
+
+  assert.deepEqual(result, { valid: true, errors: [], matrixCells: 46 })
+})
+
 test('runs the repository validator through the project tsx configuration', async () => {
   const repositoryRoot = fileURLToPath(new URL('../', import.meta.url))
   const { stdout, stderr } = await execFileAsync(
@@ -291,6 +507,17 @@ test('runs the repository validator through the project tsx configuration', asyn
 
   assert.equal(stderr, '')
   assert.match(stdout, /Device evidence structure is valid \(46 cells\)/)
+})
+
+test('exposes a strict release-only device promotion command', async () => {
+  const packageJson = JSON.parse(
+    await readFile(repositoryFile('package.json'), 'utf8'),
+  ) as { scripts: Record<string, string> }
+
+  assert.equal(
+    packageJson.scripts['verify:device-promotion'],
+    'tsx scripts/validate-device-evidence.ts --promotion',
+  )
 })
 
 test('documents the ordered stable StartOS production run', async () => {
@@ -310,6 +537,10 @@ test('documents the ordered stable StartOS production run', async () => {
   assert.match(runbook, /must not\s+be rebuilt or replaced/)
   assert.match(runbook, /evidence may be committed\s+after the candidate tag/i)
   assert.match(runbook, /never (?:capture|record|retain).*secrets/i)
+  assert.match(runbook, /DEVICE_CANDIDATE\.json/)
+  assert.match(runbook, /514af0c2fa076c8b597d9861f882bdb1b3411d9e/)
+  assert.match(runbook, /npm run verify:device-promotion/)
+  assert.match(runbook, /authenticated.*operator.*reviewer.*binding/i)
 
   let previousIndex = -1
   for (const gateId of gateIds) {
@@ -448,6 +679,8 @@ test('keeps contributor and operator documentation aligned with open gates', asy
 
   assert.match(readme, /official\s+stable StartOS `0\.4\.0`/)
   assert.match(readme, /npm run verify:device-evidence/)
+  assert.match(readme, /npm run verify:device-promotion/)
+  assert.match(readme, /DEVICE_CANDIDATE\.json/)
   assert.match(
     readme,
     /All 46 StartOS device-matrix cells remain \*\*NOT RUN\*\*/,
@@ -462,6 +695,7 @@ test('keeps contributor and operator documentation aligned with open gates', asy
   assert.match(instructions, /will not automatically promote.*owner/i)
 
   assert.match(todo, /46/)
+  assert.match(todo, /DEVICE_CANDIDATE\.json/)
   assert.match(todo, /PRE_UPGRADE_AUDIT\.md/)
   assert.match(todo, /RESOURCE_PROFILE\.production-v1\.json/)
   assert.match(todo, /PostgreSQL restore error/)

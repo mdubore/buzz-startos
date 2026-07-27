@@ -7,7 +7,8 @@
     "prettier": "prettier --write startos tests scripts",
     "prettier:check": "prettier --check startos tests scripts",
     "verify:images": "tsx scripts/verify-images.ts",
-    "verify:device-evidence": "tsx scripts/validate-device-evidence.ts"
+    "verify:device-evidence": "tsx scripts/validate-device-evidence.ts",
+    "verify:device-promotion": "tsx scripts/validate-device-evidence.ts --promotion"
   },
   "dependencies": {
     "@start9labs/start-sdk": "2.0.9",

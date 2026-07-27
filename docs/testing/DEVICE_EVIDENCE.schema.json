@@ -232,14 +232,19 @@
       "additionalProperties": false,
       "required": [
         "releaseLine",
+        "releaseTag",
         "reportedVersion",
         "buildId",
         "officialSource",
+        "sourceCommit",
         "imageSha256"
       ],
       "properties": {
         "releaseLine": {
           "const": "0.4.0"
+        },
+        "releaseTag": {
+          "const": "start-os/v0.4.0"
         },
         "reportedVersion": {
           "type": "string",
@@ -252,6 +257,9 @@
         "officialSource": {
           "type": "string",
           "format": "uri"
+        },
+        "sourceCommit": {
+          "$ref": "#/$defs/commit"
         },
         "imageSha256": {
           "$ref": "#/$defs/sha256"

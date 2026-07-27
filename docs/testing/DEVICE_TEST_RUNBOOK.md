@@ -7,8 +7,17 @@ exact build identity recorded. Manifest minimum `0.4.0-beta.10` is only the
 compatibility floor; a beta installation cannot satisfy this runbook.
 
 This document defines the procedure. It does not report that any procedure has
-run. The authoritative status remains in
-[`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md).
+run. [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is the machine-readable
+candidate identity and [`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md) is the
+authoritative execution status. The candidate remains `UNFROZEN` until final
+native artifacts and official StartOS image identities are recorded during the
+release task.
+
+The accepted OS lineage is the official `start-os/v0.4.0` tag from
+`https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0`
+at commit `514af0c2fa076c8b597d9861f882bdb1b3411d9e`. Record the distinct build ID
+and image SHA-256 used on each architecture in the candidate contract before
+executing production evidence.
 
 ## Roles And Equipment
 
@@ -35,8 +44,10 @@ restore diagnostics.
 
 Before the first gate, record one candidate tag, package version, package commit,
 upstream commit, signer fingerprint, SDK version, native archive names, byte
-sizes, and SHA-256 hashes in the matrix. Both architectures must use those exact
-values.
+sizes, and SHA-256 hashes in `DEVICE_CANDIDATE.json`, then change its state to
+`FROZEN`. Both architectures must use those exact values. Do not invent an
+identity to exercise the release workflow; automated tests use a separate
+injected frozen fixture.
 
 The candidate tag and release assets are immutable. Evidence may be committed
 after the candidate tag, but the tested tag must not move and its assets must not
@@ -60,8 +71,9 @@ matrix.
 5. Use `fail` for an observed acceptance failure and `blocked` when a prerequisite
    or environment prevents a valid observation. Link the record from the matching
    matrix cell in either case; neither result can be waived.
-6. Run `npm run verify:device-evidence`. Commit the evidence and matrix link
-   together after review.
+6. Run `npm run verify:device-evidence`. This checks the template and any linked
+   evidence but deliberately allows `NOT RUN` cells. Commit the evidence and
+   matrix link together after review.
 
 Capture timestamps in UTC. Before persistence, restore, update, and lifecycle
 gates, hash a deterministic sanitized state inventory covering identities,
@@ -259,7 +271,14 @@ and no prior instance is expected to remain.
 
 Production promotion requires all 46 matrix cells to link valid passing records
 for the same candidate, with independent approval and no open high or critical
-issues. Compare candidate identity across every record, rerun
-`npm run verify:device-evidence`, and verify the tag and release-asset hashes one
-last time. A failed, blocked, missing, stale, mismatched, or unreviewed cell stops
-promotion.
+issues. Compare candidate identity across every record, run
+`npm run verify:device-promotion`, and verify the tag and release-asset hashes
+one last time. The strict command rejects `UNFROZEN` candidates and every
+`NOT RUN`, `FAIL`, `BLOCKED`, unlinked, stale, mismatched, or unreviewed cell.
+
+The release process must also enforce authenticated operator/reviewer binding
+outside the self-asserted JSON record. Set
+`promotionControls.authenticatedOperatorReviewerBinding` to `ENFORCED` only
+after that release control is active and auditable. It remains `PENDING` during
+pre-release documentation work, and strict promotion fails closed while it is
+pending.

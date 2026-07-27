@@ -36,9 +36,11 @@
     "kernelVersion": "7.0.7",
     "startos": {
       "releaseLine": "0.4.0",
+      "releaseTag": "start-os/v0.4.0",
       "reportedVersion": "0.4.0",
       "buildId": "0.4.0-evidence-fixture",
-      "officialSource": "https://example.test/startos/v0.4.0",
+      "officialSource": "https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0",
+      "sourceCommit": "514af0c2fa076c8b597d9861f882bdb1b3411d9e",
       "imageSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     }
   },

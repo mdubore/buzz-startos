@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "state": "FROZEN",
+  "startos": {
+    "releaseLine": "0.4.0",
+    "releaseTag": "start-os/v0.4.0",
+    "sourceUrl": "https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0",
+    "sourceCommit": "514af0c2fa076c8b597d9861f882bdb1b3411d9e",
+    "architectures": {
+      "x86_64": {
+        "buildId": "0.4.0-evidence-fixture",
+        "imageSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "aarch64": {
+        "buildId": "0.4.0-evidence-fixture-arm",
+        "imageSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    }
+  },
+  "package": {
+    "tag": "v0.2.1_0",
+    "version": "0.2.1:0",
+    "packageCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "upstreamCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "signerFingerprint": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "manifestMinimumStartos": "0.4.0-beta.10",
+    "sdkVersion": "2.0.9",
+    "artifacts": {
+      "x86_64": {
+        "name": "buzz_x86_64.s9pk",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "sizeBytes": 239830138
+      },
+      "aarch64": {
+        "name": "buzz_aarch64.s9pk",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "sizeBytes": 239830139
+      }
+    }
+  },
+  "upgradeSource": {
+    "tag": "v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2",
+    "version": "0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2",
+    "packageCommit": "0103ba850c08ae84cca5c623ea76c855d7a7f1a4",
+    "upstreamCommit": "dd222a509b156ba52ed3219e895d7bf1cf322c92",
+    "signerFingerprint": "sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c",
+    "artifacts": {
+      "x86_64": {
+        "name": "buzz_x86_64.s9pk",
+        "sha256": "8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2"
+      },
+      "aarch64": {
+        "name": "buzz_aarch64.s9pk",
+        "sha256": "72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638"
+      }
+    }
+  },
+  "promotionControls": {
+    "authenticatedOperatorReviewerBinding": "ENFORCED"
+  }
+}

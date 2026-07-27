@@ -2,7 +2,10 @@
 
 - [ ] Rebuild both architecture packages from the final release commit,
       generate `SHA256SUMS`, inspect both manifests and commitments, and verify
-      both archives against the committed signing public key.
+      both archives against the committed signing public key. Freeze those exact
+      identities and the observed per-architecture StartOS build/image hashes in
+      [`docs/testing/DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json);
+      do not replace its `UNFROZEN` state with synthetic values.
 - [ ] Complete every x86_64 and aarch64 row in
       [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md),
       filling all 46 cells with independently reviewed real-device and artifact

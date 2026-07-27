@@ -16,6 +16,14 @@ stable StartOS `0.4.0` release. Production acceptance targets an exact stable
 device build; the SDK-generated manifest minimum `0.4.0-beta.10` is only a
 compatibility floor and does not count as device validation.
 
+The machine-readable release identity is
+[`docs/testing/DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json). It
+intentionally remains `UNFROZEN` until final native package artifacts and both
+StartOS device-image identities exist. `npm run verify:device-evidence` checks
+the template and linked records during execution; the release-only
+`npm run verify:device-promotion` command additionally requires one frozen
+identity and exactly 46 linked passing cells.
+
 ## What Buzz Is
 
 [Buzz](https://github.com/block/buzz) is a self-hosted workspace where people
