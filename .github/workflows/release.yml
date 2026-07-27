@@ -5,29 +5,135 @@ on:
     tags:
       - 'v*.*'
 
-jobs:
-  guard:
-    runs-on: ubuntu-latest
-    outputs:
-      id: ${{ steps.read.outputs.id }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: read
-        run: |
-          id="$(awk -F"'" '/id:/ {print $2; exit}' startos/manifest/index.ts)"
-          echo "id=$id" >> "$GITHUB_OUTPUT"
+permissions:
+  contents: read
 
-  release:
-    needs: guard
-    if: needs.guard.outputs.id != 'hello-world'
-    uses: Start9Labs/start-technologies/.github/workflows/release.yml@master
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Verify release tag and notes
+        run: |
+          VERSION="$(
+            grep -oP "version:\s*['\"]\K[^'\"]+" startos/versions/current.ts
+          )"
+          test -n "$VERSION"
+          EXPECTED_TAG="v${VERSION//:/_}"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test -s "docs/releases/${GITHUB_REF_NAME}.md"
+
+  signed-package:
+    needs: preflight
+    uses: ./.github/workflows/package.yml
     with:
-      # FREE_DISK_SPACE: true
-      RELEASE_REGISTRY: ${{ vars.RELEASE_REGISTRY }}
-      S3_S9PKS_BASE_URL: ${{ vars.S3_S9PKS_BASE_URL }}
-    secrets:
-      DEV_KEY: ${{ secrets.DEV_KEY }}
-      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
-      S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+      signed_release: true
+
+  finalize-prerelease:
+    needs: signed-package
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Reverify release tag and notes
+        run: |
+          VERSION="$(
+            grep -oP "version:\s*['\"]\K[^'\"]+" startos/versions/current.ts
+          )"
+          test -n "$VERSION"
+          EXPECTED_TAG="v${VERSION//:/_}"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test -s "docs/releases/${GITHUB_REF_NAME}.md"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: downloads
+          pattern: buzz-*
+          merge-multiple: false
+
+      - name: Install package verifier
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ca-certificates \
+            curl \
+            openssl \
+            xxd
+          START_CLI_TMP="$(mktemp)"
+          trap 'rm -f "$START_CLI_TMP"' EXIT
+          curl -fL \
+            'https://github.com/Start9Labs/start-technologies/releases/download/start-cli/v1.1.0/start-cli_x86_64-linux' \
+            -o "$START_CLI_TMP"
+          printf '%s  %s\n' \
+            '70eff67b6e9a936acd8aaaf787b783819252ecedaa5c74d462e3b15ed4dd843a' \
+            "$START_CLI_TMP" | sha256sum --check
+          sudo install -Dm755 "$START_CLI_TMP" /usr/local/bin/start-cli
+          test "$(start-cli --version)" = 'start-cli 1.1.0'
+
+      - name: Verify and prepare release artifacts
+        run: |
+          ARTIFACT_DIR="$RUNNER_TEMP/release-artifacts"
+          rm -rf "$ARTIFACT_DIR"
+          install -d -m 0700 "$ARTIFACT_DIR"
+          test "$(
+            find downloads/buzz-x86 -type f -name 'buzz_x86_64.s9pk' |
+              wc -l
+          )" -eq 1
+          test "$(
+            find downloads/buzz-arm -type f -name 'buzz_aarch64.s9pk' |
+              wc -l
+          )" -eq 1
+          test "$(find downloads -type f -name '*.s9pk' | wc -l)" -eq 2
+          find downloads -type f -name '*.s9pk' -exec cp '{}' "$ARTIFACT_DIR/" \;
+          test "$(find "$ARTIFACT_DIR" -maxdepth 1 -name '*.s9pk' | wc -l)" -eq 2
+          test -s "$ARTIFACT_DIR/buzz_x86_64.s9pk"
+          test -s "$ARTIFACT_DIR/buzz_aarch64.s9pk"
+          ./scripts/verify-s9pk-signer.sh \
+            "$ARTIFACT_DIR/buzz_x86_64.s9pk" \
+            "$ARTIFACT_DIR/buzz_aarch64.s9pk"
+          cp assets/signing-pubkey.pem "$ARTIFACT_DIR/SIGNING-PUBKEY.pem"
+          cp assets/signing-pubkey.sha256 "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256"
+          NOTES_FILE="$GITHUB_WORKSPACE/docs/releases/${GITHUB_REF_NAME}.md"
+          test -s "$NOTES_FILE"
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum ./*.s9pk > SHA256SUMS
+          )
+
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ARTIFACT_DIR="$RUNNER_TEMP/release-artifacts"
+          NOTES_FILE="$GITHUB_WORKSPACE/docs/releases/${GITHUB_REF_NAME}.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              "$ARTIFACT_DIR"/*.s9pk \
+              "$ARTIFACT_DIR/SHA256SUMS" \
+              "$ARTIFACT_DIR/SIGNING-PUBKEY.pem" \
+              "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256" \
+              --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --prerelease --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "$ARTIFACT_DIR"/*.s9pk \
+              "$ARTIFACT_DIR/SHA256SUMS" \
+              "$ARTIFACT_DIR/SIGNING-PUBKEY.pem" \
+              "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256" \
+              --verify-tag --prerelease --notes-file "$NOTES_FILE"
+          fi
+
+      - name: Remove prepared release artifacts
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/release-artifacts"

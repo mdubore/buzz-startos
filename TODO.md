@@ -1,7 +1,5 @@
 # Remaining Release Work
 
-- [ ] Replace the generated scaffold workflows with local x86_64/aarch64
-      package jobs and pin every third-party action to a reviewed full commit.
 - [ ] Rebuild both architecture packages from the final release commit,
       generate `SHA256SUMS`, inspect both manifests and commitments, and verify
       both archives against the committed signing public key.

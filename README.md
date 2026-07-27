@@ -272,9 +272,13 @@ index digest, and record native amd64 and arm64 platform digests. The live
 image verifier rejects tag drift, missing platforms, revision mismatches, and
 unexpected runtime metadata.
 
-Release CI policy requires every third-party action to be pinned to a reviewed
-full commit. The scaffold workflows currently in this branch are not
-release-authoritative and must be replaced before publication. See
+CI uses only reviewed, full-commit action pins and repository-local reusable
+workflows. Pull requests, main-branch pushes, and manual builds create separate
+x86_64 and aarch64 sideload artifacts with ephemeral signing identities.
+Matching version tags use the protected `release` environment to build both
+architectures with the release key, verify each signer, and publish an
+idempotent GitHub prerelease with checksums and the signing public key. The
+workflow does not publish to a StartOS registry or S3. See
 [`UPDATING.md`](UPDATING.md) for the reviewed upstream-update procedure and
 [`docs/upstream/dd222a5-runtime-contract.md`](docs/upstream/dd222a5-runtime-contract.md)
 for the frozen runtime evidence.

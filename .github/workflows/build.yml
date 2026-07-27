@@ -2,19 +2,22 @@ name: Build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths-ignore: ['*.md']
-    branches: ['master']
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  build:
-    if: github.event.pull_request.draft == false
-    uses: Start9Labs/start-technologies/.github/workflows/build.yml@master
-    # with:
-    #   FREE_DISK_SPACE: true
-    secrets:
-      DEV_KEY: ${{ secrets.DEV_KEY }}
+  package:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    uses: ./.github/workflows/package.yml
+    with:
+      signed_release: false
