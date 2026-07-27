@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import type { T } from '@start9labs/start-sdk'
+
 import {
   BACKUP_VOLUME_IDS,
+  createBackupWith,
   readBackupPostgresPassword,
 } from '../startos/backups.js'
 import type { StoredStateRead } from '../startos/fileModels/read-store.js'
@@ -26,6 +29,65 @@ test('PostgreSQL uses a logical dump while MinIO is authoritative for media and 
   assert.deepEqual(BACKUP_VOLUME_IDS, ['startos', 'redis', 'media'])
   assert.equal(BACKUP_VOLUME_IDS.includes('postgres'), false)
   assert.equal(BACKUP_VOLUME_IDS.includes('git-cache'), false)
+  assert.equal(Object.isFrozen(BACKUP_VOLUME_IDS), true)
+})
+
+test('backup preflight rejects malformed state without calling the delegate or exposing stored values', async () => {
+  const storedValue = 'do-not-print-this-backup-value'
+  let delegateCalls = 0
+
+  await assert.rejects(
+    createBackupWith(
+      { effects: {} as T.Effects },
+      {
+        readStoredStateOnce: async () =>
+          parsed({
+            ...VALID_SECRETS,
+            postgresPassword: storedValue,
+          }),
+        createBackup: async () => {
+          delegateCalls += 1
+        },
+      },
+    ),
+    (error: Error) => {
+      assert.equal(
+        error.message,
+        'Stored Buzz state requires recovery before backup',
+      )
+      assert.equal(error.message.includes(storedValue), false)
+      return true
+    },
+  )
+  assert.equal(delegateCalls, 0)
+})
+
+test('backup preflight delegates valid ready and needs-setup state with the original options', async () => {
+  const validStates: RawStoredState[] = [
+    VALID_SECRETS,
+    {
+      ...VALID_SECRETS,
+      ownerPubkeyHex: '11'.repeat(32),
+      primaryUrl: 'https://buzz.example',
+    },
+  ]
+
+  for (const state of validStates) {
+    const options = { effects: {} as T.Effects }
+    const delegateResult = { state }
+    let delegatedOptions: typeof options | undefined
+
+    const result = await createBackupWith(options, {
+      readStoredStateOnce: async () => parsed(state),
+      createBackup: async (received) => {
+        delegatedOptions = received
+        return delegateResult
+      },
+    })
+
+    assert.equal(result, delegateResult)
+    assert.equal(delegatedOptions, options)
+  }
 })
 
 test('the lazy PostgreSQL password accepts both ready and needs-setup state', async () => {

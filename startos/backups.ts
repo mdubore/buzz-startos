@@ -1,3 +1,5 @@
+import type { T } from '@start9labs/start-sdk'
+
 import {
   POSTGRES_DATA_PATH,
   POSTGRES_DB,
@@ -11,7 +13,18 @@ import {
 } from './fileModels/read-store.js'
 import { sdk } from './sdk'
 
-export const BACKUP_VOLUME_IDS = ['startos', 'redis', 'media']
+const BACKUP_VOLUME_ID_TUPLE = Object.freeze([
+  'startos',
+  'redis',
+  'media',
+] as const)
+
+export const BACKUP_VOLUME_IDS: readonly string[] = BACKUP_VOLUME_ID_TUPLE
+
+export type CreateBackupDependencies = {
+  readStoredStateOnce: () => Promise<StoredStateRead>
+  createBackup: T.ExpectedExports.createBackup
+}
 
 export async function readBackupPostgresPassword(
   readStoredState: () => Promise<StoredStateRead>,
@@ -23,8 +36,16 @@ export async function readBackupPostgresPassword(
   return validation.state.postgresPassword
 }
 
-export const { createBackup, restoreInit } = sdk.setupBackups(async () =>
-  sdk.Backups.withPgDump({
+export async function createBackupWith(
+  options: Parameters<T.ExpectedExports.createBackup>[0],
+  dependencies: CreateBackupDependencies,
+): Promise<unknown> {
+  await readBackupPostgresPassword(dependencies.readStoredStateOnce)
+  return dependencies.createBackup(options)
+}
+
+function buildBackups() {
+  const backups = sdk.Backups.withPgDump({
     imageId: 'postgres',
     dbVolume: 'postgres',
     mountpoint: POSTGRES_MOUNTPOINT,
@@ -34,7 +55,19 @@ export const { createBackup, restoreInit } = sdk.setupBackups(async () =>
     password: async () => readBackupPostgresPassword(readStoredStateOnce),
     readyTimeout: 120_000,
   })
-    .addVolume('startos')
-    .addVolume('redis')
-    .addVolume('media'),
-)
+
+  for (const volumeId of BACKUP_VOLUME_ID_TUPLE) {
+    backups.addVolume(volumeId)
+  }
+
+  return backups
+}
+
+const backupSetup = sdk.setupBackups(async () => buildBackups())
+
+export const restoreInit = backupSetup.restoreInit
+export const createBackup: T.ExpectedExports.createBackup = (options) =>
+  createBackupWith(options, {
+    readStoredStateOnce,
+    createBackup: backupSetup.createBackup,
+  })
