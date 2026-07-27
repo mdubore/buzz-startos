@@ -175,17 +175,20 @@ export async function runMembershipMutationWith(
       throw new Error('The relay owner cannot be added or removed')
     }
 
-    const attemptedSecond = await chooseMutationSecond(validation, dependencies)
     const environment = mutationEnvironment(buildRuntimeConfig(validation))
+    let attemptedSecond: number | undefined
 
     try {
       await dependencies.withTempBuzz(async (subcontainer) => {
+        attemptedSecond = await chooseMutationSecond(validation, dependencies)
         await subcontainer.execFail(prepared.command, { env: environment })
       })
     } finally {
-      await dependencies.mergeStore({
-        lastMembershipMutationUnixSecond: attemptedSecond,
-      })
+      if (attemptedSecond !== undefined) {
+        await dependencies.mergeStore({
+          lastMembershipMutationUnixSecond: attemptedSecond,
+        })
+      }
     }
 
     return {

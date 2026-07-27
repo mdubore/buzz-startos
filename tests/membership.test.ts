@@ -396,6 +396,44 @@ test('a fresh queue honors the persisted attempted second after process restart'
   assert.equal(stored.lastMembershipMutationUnixSecond, 501)
 })
 
+test('the persisted attempt second is chosen after temporary container creation', async () => {
+  let stored: RawStoredState = {
+    ...VALID_STORE,
+    lastMembershipMutationUnixSecond: 700,
+  }
+  let now = 701
+  const commandSeconds: number[] = []
+  const dependencies: MembershipMutationDependencies = {
+    withStoreMutation: createStoreMutationQueue(),
+    readStoredStateOnce: async () => parsed(stored),
+    mergeStore: async (patch) => {
+      stored = { ...stored, ...patch }
+    },
+    withTempBuzz: async (run) => {
+      now = 702
+      return run({
+        execFail: async () => {
+          commandSeconds.push(now)
+          return { stdout: '', stderr: '' }
+        },
+      })
+    },
+    nowUnixSecond: () => now,
+    sleep: async (milliseconds) => {
+      now += Math.ceil(milliseconds / 1_000)
+    },
+  }
+
+  await runMembershipMutationWith(
+    'add',
+    { publicKey: MEMBER, role: 'member' },
+    dependencies,
+  )
+
+  assert.deepEqual(commandSeconds, [702])
+  assert.equal(stored.lastMembershipMutationUnixSecond, 702)
+})
+
 test('list members uses the exact command and least-privilege environment', async () => {
   const calls: Array<{
     command: string[]
