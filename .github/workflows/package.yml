@@ -7,6 +7,10 @@ on:
         description: Build with the protected release signing identity
         required: true
         type: boolean
+    secrets:
+      DEV_KEY:
+        description: Protected release signing key supplied by the release environment
+        required: false
 
 permissions:
   contents: read

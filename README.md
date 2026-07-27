@@ -337,14 +337,14 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
 
 ## Status
 
-- The automated suite contains 128 unit tests covering identity, immutable URL
+- The automated suite contains 130 tests covering identity, immutable URL
   state, secrets, runtime configuration, daemon health, membership
-  serialization, and backup policy.
+  serialization, backup policy, and release workflow policy.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
-- Signed x86_64 and aarch64 candidates were built and statically inspected at
-  package commit `20badb8`. The later device-evidence commit changed the package
-  tree, so those archives are non-final and are not release artifacts.
+- Signed x86_64 and aarch64 `:0` candidates were built and statically inspected
+  at package commit `cefe017`. They were not published, and the `:1` workflow
+  and metadata commit makes them non-final.
 - No StartOS device matrix item has been completed. Install, client, media,
   Git, restart, failure, backup/restore, and resource behavior remain unproven
   on both architectures.
