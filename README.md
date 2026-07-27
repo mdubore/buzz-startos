@@ -5,9 +5,11 @@
 # Buzz for StartOS
 
 > [!WARNING]
-> This package follows a frozen development snapshot of Buzz's upstream
-> `main` branch. It is intended for reviewed StartOS sideload testing, not as a
-> stable upstream Buzz release or a registry-published StartOS service.
+> The current `:2` prerelease packages the frozen Buzz snapshot `dd222a5` and
+> predates upstream fix [`00ecf2c`](https://github.com/block/buzz/commit/00ecf2cac7544d986b4eb111ad0a8b1d7560791f)
+> for unauthorized channel-role changes, including owner demotion. The
+> published `:2` artifacts are unsuitable for production. A new package
+> revision must sync the fix and pass the StartOS device matrix.
 
 This repository packages the Buzz relay and its data services for the StartOS
 v0.4.0 release line. The SDK-generated package manifest currently requires
@@ -342,13 +344,24 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
   serialization, backup policy, and release workflow policy.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
-- Signed x86_64 and aarch64 `:1` candidates were built and statically inspected
-  at package commit `fd4ab4d`. The protected CI run failed closed before its
-  signed builds, so no release assets were published; the `:2` workflow and
-  metadata commit makes the local candidates non-final.
-- No StartOS device matrix item has been completed. Install, client, media,
-  Git, restart, failure, backup/restore, and resource behavior remain unproven
-  on both architectures.
+- The public
+  [`:2` prerelease](https://github.com/mdubore/buzz-startos/releases/tag/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2)
+  contains signed native x86_64 and aarch64 packages built from package commit
+  `0103ba8`. Its release workflow, checksums, S9PK signatures, signer identity,
+  commitments, and manifests passed static verification.
+- The canonical published SHA-256 hashes are
+  `8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2`
+  for x86_64 and
+  `72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638`
+  for aarch64. See the release's
+  [`PUBLISHED-ARTIFACT-VERIFICATION.md`](https://github.com/mdubore/buzz-startos/releases/download/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2/PUBLISHED-ARTIFACT-VERIFICATION.md).
+- All 26 StartOS device-matrix cells remain **NOT RUN**. Install, client,
+  media, Git, restart, failure, backup/restore, and resource behavior remain
+  unproven on both architectures.
+- At final verification on 2026-07-27, upstream `main` was 22 commits beyond
+  `dd222a5` and included an authorization security fix. A new runtime-contract
+  review, image-pin refresh, package revision, and device validation are
+  required before stable use.
 - This package has not been published to a registry.
 
 See [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md)
@@ -360,6 +373,11 @@ for the evidence checklist.
 package_id: buzz
 purpose: private Buzz relay and backend for a Nostr-signed human/agent workspace
 startos_target: v0.4.0 release line
+minimum_startos: "0.4.0-beta.10"
+release_status: "prerelease; sideload only; not production-ready"
+device_validation: "26 matrix cells NOT RUN"
+upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
+security_status: ":2 predates unauthorized role-change fix 00ecf2c"
 full_client:
   required: true
   desktop: external Buzz desktop application
