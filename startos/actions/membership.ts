@@ -25,6 +25,7 @@ import { sdk } from '../sdk.js'
 
 const PUBLIC_KEY_PATTERN =
   '^(?:[0-9A-Fa-f]{64}|npub1[023456789acdefghjklmnpqrstuvwxyz]{58})$'
+const MAX_MEMBERSHIP_SLEEP_MILLISECONDS = 60_000
 
 type MembershipTimestampPatch = {
   lastMembershipMutationUnixSecond: number
@@ -153,7 +154,12 @@ async function chooseMutationSecond(
   let current = dependencies.nowUnixSecond()
 
   while (previous !== undefined && current <= previous) {
-    await dependencies.sleep((previous - current + 1) * 1_000)
+    await dependencies.sleep(
+      Math.min(
+        (previous - current + 1) * 1_000,
+        MAX_MEMBERSHIP_SLEEP_MILLISECONDS,
+      ),
+    )
     current = dependencies.nowUnixSecond()
   }
 
@@ -180,8 +186,18 @@ export async function runMembershipMutationWith(
 
     try {
       await dependencies.withTempBuzz(async (subcontainer) => {
-        attemptedSecond = await chooseMutationSecond(validation, dependencies)
-        await subcontainer.execFail(prepared.command, { env: environment })
+        const scheduledSecond = await chooseMutationSecond(
+          validation,
+          dependencies,
+        )
+        try {
+          await subcontainer.execFail(prepared.command, { env: environment })
+        } finally {
+          attemptedSecond = Math.max(
+            scheduledSecond,
+            dependencies.nowUnixSecond(),
+          )
+        }
       })
     } finally {
       if (attemptedSecond !== undefined) {

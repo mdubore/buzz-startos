@@ -434,6 +434,143 @@ test('the persisted attempt second is chosen after temporary container creation'
   assert.equal(stored.lastMembershipMutationUnixSecond, 702)
 })
 
+test('command startup delay updates the marker and forces the next command into a later second', async () => {
+  let stored: RawStoredState = {
+    ...VALID_STORE,
+    lastMembershipMutationUnixSecond: 800,
+  }
+  let now = 801
+  let commands = 0
+  const commandSeconds: number[] = []
+  const writes: number[] = []
+  const sleeps: number[] = []
+  const dependencies: MembershipMutationDependencies = {
+    withStoreMutation: createStoreMutationQueue(),
+    readStoredStateOnce: async () => parsed(stored),
+    mergeStore: async (patch) => {
+      writes.push(patch.lastMembershipMutationUnixSecond)
+      stored = { ...stored, ...patch }
+    },
+    withTempBuzz: async (run) =>
+      run({
+        execFail: async () => {
+          commands += 1
+          if (commands === 1) now = 802
+          commandSeconds.push(now)
+          return { stdout: '', stderr: '' }
+        },
+      }),
+    nowUnixSecond: () => now,
+    sleep: async (milliseconds) => {
+      sleeps.push(milliseconds)
+      now += Math.ceil(milliseconds / 1_000)
+    },
+  }
+
+  await runMembershipMutationWith(
+    'add',
+    { publicKey: MEMBER, role: 'member' },
+    dependencies,
+  )
+  await runMembershipMutationWith(
+    'remove',
+    { publicKey: OTHER_MEMBER, role: 'admin' },
+    dependencies,
+  )
+
+  assert.deepEqual(commandSeconds, [802, 803])
+  assert.deepEqual(writes, [802, 803])
+  assert.deepEqual(sleeps, [1_000])
+})
+
+test('a rejected command records its later attempt second before releasing the queue', async () => {
+  let stored: RawStoredState = {
+    ...VALID_STORE,
+    lastMembershipMutationUnixSecond: 900,
+  }
+  let now = 901
+  let commands = 0
+  const commandSeconds: number[] = []
+  const writes: number[] = []
+  const sleeps: number[] = []
+  const dependencies: MembershipMutationDependencies = {
+    withStoreMutation: createStoreMutationQueue(),
+    readStoredStateOnce: async () => parsed(stored),
+    mergeStore: async (patch) => {
+      writes.push(patch.lastMembershipMutationUnixSecond)
+      stored = { ...stored, ...patch }
+    },
+    withTempBuzz: async (run) =>
+      run({
+        execFail: async () => {
+          commands += 1
+          if (commands === 1) {
+            now = 902
+            commandSeconds.push(now)
+            throw new Error('expected delayed rejection')
+          }
+          commandSeconds.push(now)
+          return { stdout: '', stderr: '' }
+        },
+      }),
+    nowUnixSecond: () => now,
+    sleep: async (milliseconds) => {
+      sleeps.push(milliseconds)
+      now += Math.ceil(milliseconds / 1_000)
+    },
+  }
+
+  await assert.rejects(
+    runMembershipMutationWith(
+      'add',
+      { publicKey: MEMBER, role: 'member' },
+      dependencies,
+    ),
+    /expected delayed rejection/,
+  )
+  await runMembershipMutationWith(
+    'remove',
+    { publicKey: OTHER_MEMBER, role: 'admin' },
+    dependencies,
+  )
+
+  assert.deepEqual(commandSeconds, [902, 903])
+  assert.deepEqual(writes, [902, 903])
+  assert.deepEqual(sleeps, [1_000])
+})
+
+test('far-future stored seconds use bounded sleep intervals', async () => {
+  const previous = 3_000_100
+  let now = 100
+  const sleeps: number[] = []
+  const dependencies: MembershipMutationDependencies = {
+    withStoreMutation: createStoreMutationQueue(),
+    readStoredStateOnce: async () =>
+      parsed({
+        ...VALID_STORE,
+        lastMembershipMutationUnixSecond: previous,
+      }),
+    mergeStore: async () => undefined,
+    withTempBuzz: async (run) =>
+      run({
+        execFail: async () => ({ stdout: '', stderr: '' }),
+      }),
+    nowUnixSecond: () => now,
+    sleep: async (milliseconds) => {
+      sleeps.push(milliseconds)
+      now = previous + 1
+    },
+  }
+
+  await runMembershipMutationWith(
+    'add',
+    { publicKey: MEMBER, role: 'member' },
+    dependencies,
+  )
+
+  assert.deepEqual(sleeps, [60_000])
+})
+
 test('list members uses the exact command and least-privilege environment', async () => {
   const calls: Array<{
     command: string[]
