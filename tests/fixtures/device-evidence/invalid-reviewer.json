@@ -1,0 +1,6 @@
+{
+  "extends": "valid-artifact.json",
+  "replace": {
+    "/review/reviewer": "@fixture-operator"
+  }
+}

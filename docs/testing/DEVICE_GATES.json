@@ -1,0 +1,341 @@
+{
+  "schemaVersion": 1,
+  "architectures": ["x86_64", "aarch64"],
+  "gates": [
+    {
+      "id": "ART-01",
+      "title": "Artifact identity and native architecture",
+      "category": "artifact",
+      "dependsOn": [],
+      "requiredAssertions": [
+        "artifact.checksum",
+        "artifact.signature",
+        "artifact.signer",
+        "artifact.manifest",
+        "artifact.architecture"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "INS-01",
+      "title": "Clean sideload and pre-setup block",
+      "category": "install",
+      "dependsOn": ["ART-01"],
+      "requiredAssertions": [
+        "install.sideload",
+        "install.version",
+        "install.pre-setup-block"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "SET-01",
+      "title": "Initial owner and canonical URL setup",
+      "category": "setup",
+      "dependsOn": ["INS-01"],
+      "requiredAssertions": [
+        "setup.owner-normalized",
+        "setup.canonical-url",
+        "setup.task-cleared",
+        "setup.health"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "NET-01",
+      "title": "Canonical HTTP and limited browser routes",
+      "category": "network",
+      "dependsOn": ["SET-01"],
+      "requiredAssertions": [
+        "http.canonical-host",
+        "http.limited-routes",
+        "http.no-full-client-claim"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "NET-02",
+      "title": "WebSocket NIP-42 authentication and event round trip",
+      "category": "network",
+      "dependsOn": ["SET-01"],
+      "requiredAssertions": [
+        "websocket.upgrade",
+        "websocket.owner-auth",
+        "websocket.member-auth",
+        "websocket.unauthorized-rejected",
+        "websocket.event-round-trip"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "AUTH-01",
+      "title": "StartOS membership actions",
+      "category": "authorization",
+      "dependsOn": ["SET-01"],
+      "requiredAssertions": [
+        "membership.member-lifecycle",
+        "membership.admin-lifecycle",
+        "membership.owner-rejected",
+        "membership.roster-consistent"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "AUTH-02",
+      "title": "Channel-role authorization regression",
+      "category": "authorization",
+      "dependsOn": ["AUTH-01", "NET-02"],
+      "requiredAssertions": [
+        "authorization.non-admin-role-change-rejected",
+        "authorization.owner-demotion-rejected",
+        "authorization.owner-set-preserved",
+        "authorization.active-owner-per-channel"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "MED-01",
+      "title": "Media upload and content-addressed retrieval",
+      "category": "media",
+      "dependsOn": ["NET-02", "AUTH-01"],
+      "requiredAssertions": [
+        "media.authenticated-upload",
+        "media.content-hash",
+        "media.retrieval",
+        "media.link-accessible-get"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "GIT-01",
+      "title": "NIP-98 Git create, push and clone",
+      "category": "git",
+      "dependsOn": ["NET-01", "AUTH-01"],
+      "requiredAssertions": [
+        "git.nip98-auth",
+        "git.create",
+        "git.push",
+        "git.clone",
+        "git.object-integrity"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "PER-01",
+      "title": "Service restart persistence",
+      "category": "persistence",
+      "dependsOn": ["AUTH-02", "MED-01", "GIT-01"],
+      "requiredAssertions": [
+        "restart.health",
+        "restart.state-preserved",
+        "restart.identity-preserved"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "PER-02",
+      "title": "Package-container rebuild persistence",
+      "category": "persistence",
+      "dependsOn": ["PER-01"],
+      "requiredAssertions": [
+        "rebuild.health",
+        "rebuild.state-preserved",
+        "rebuild.identity-preserved"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "PER-03",
+      "title": "StartOS reboot persistence",
+      "category": "persistence",
+      "dependsOn": ["PER-02"],
+      "requiredAssertions": [
+        "reboot.health",
+        "reboot.state-preserved",
+        "reboot.identity-preserved"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "PER-04",
+      "title": "Git cache deletion and MinIO hydration",
+      "category": "persistence",
+      "dependsOn": ["GIT-01", "PER-03"],
+      "requiredAssertions": [
+        "git-cache.only-cache-deleted",
+        "git-cache.hydrated",
+        "git-cache.object-integrity"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "BND-01",
+      "title": "Wrong and missing Host rejection",
+      "category": "boundary",
+      "dependsOn": ["NET-01", "NET-02"],
+      "requiredAssertions": [
+        "host.http-tenant-rejected",
+        "host.websocket-rejected",
+        "host.generic-response-separated"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "BKP-01",
+      "title": "Cross-host backup and restore",
+      "category": "recovery",
+      "dependsOn": ["PER-04"],
+      "requiredAssertions": [
+        "backup.completed",
+        "backup.service-restarted",
+        "restore.clean-host",
+        "restore.postgres-logical",
+        "restore.state-preserved",
+        "restore.git-cache-hydrated"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "HLT-01",
+      "title": "MinIO failure and recovery",
+      "category": "health",
+      "dependsOn": ["BKP-01"],
+      "requiredAssertions": [
+        "minio.failure-induced",
+        "minio.health-failed",
+        "minio.recovered",
+        "minio.data-preserved"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "HLT-02",
+      "title": "PostgreSQL failure and recovery",
+      "category": "health",
+      "dependsOn": ["BKP-01"],
+      "requiredAssertions": [
+        "postgres.failure-induced",
+        "postgres.health-failed",
+        "postgres.recovered",
+        "postgres.data-preserved"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "HLT-03",
+      "title": "Redis failure and recovery",
+      "category": "health",
+      "dependsOn": ["BKP-01"],
+      "requiredAssertions": [
+        "redis.failure-induced",
+        "redis.health-failed",
+        "redis.recovered",
+        "redis.service-continuity"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "REC-01",
+      "title": "Canonical-address loss and recovery",
+      "category": "recovery",
+      "dependsOn": ["BKP-01"],
+      "requiredAssertions": [
+        "canonical-url.start-blocked",
+        "canonical-url.task-created",
+        "canonical-url.no-substitution",
+        "canonical-url.recovered"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "REC-02",
+      "title": "Malformed wrapper state recovery",
+      "category": "recovery",
+      "dependsOn": ["BKP-01"],
+      "requiredAssertions": [
+        "stable-state.start-blocked",
+        "stable-state.task-created",
+        "stable-state.backup-rejected",
+        "stable-state.no-secret-diagnostics",
+        "stable-state.restored"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "UPG-01",
+      "title": "Published revision :2 to candidate update",
+      "category": "upgrade",
+      "dependsOn": ["ART-01"],
+      "requiredAssertions": [
+        "upgrade.audit-approved",
+        "upgrade.backup-verified",
+        "upgrade.completed",
+        "upgrade.version",
+        "upgrade.state-preserved",
+        "upgrade.authorization-fixed",
+        "upgrade.no-arbitrary-owner-repair"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    },
+    {
+      "id": "RES-01",
+      "title": "Resource profile and 24-hour soak",
+      "category": "resources",
+      "dependsOn": ["BKP-01", "UPG-01"],
+      "requiredAssertions": [
+        "resources.profile-completed",
+        "resources.measurements-retained",
+        "resources.backup-restore-measured",
+        "resources.soak-24h",
+        "resources.no-unexpected-failure",
+        "resources.sizing-report"
+      ],
+      "destructive": false,
+      "requiresPhysicalHardware": true
+    },
+    {
+      "id": "LIF-01",
+      "title": "Hard uninstall and clean reinstall",
+      "category": "lifecycle",
+      "dependsOn": [
+        "RES-01",
+        "HLT-01",
+        "HLT-02",
+        "HLT-03",
+        "REC-01",
+        "REC-02",
+        "BND-01"
+      ],
+      "requiredAssertions": [
+        "uninstall.completed",
+        "uninstall.data-removed",
+        "reinstall.completed",
+        "reinstall.new-identity",
+        "reinstall.setup-required"
+      ],
+      "destructive": true,
+      "requiresPhysicalHardware": false
+    }
+  ]
+}

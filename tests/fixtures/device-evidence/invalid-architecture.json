@@ -1,0 +1,6 @@
+{
+  "extends": "valid-artifact.json",
+  "replace": {
+    "/releaseCandidate/archive/name": "buzz_aarch64.s9pk"
+  }
+}

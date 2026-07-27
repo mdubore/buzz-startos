@@ -5,9 +5,16 @@
       both archives against the committed signing public key.
 - [ ] Complete every x86_64 and aarch64 row in
       [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md),
-      attaching real device and artifact evidence only.
-- [ ] Measure steady-state and startup CPU, memory, and disk use before adding
-      hardware requirements or operational sizing claims.
+      filling all 46 cells with independently reviewed real-device and artifact
+      evidence only.
+- [ ] Run
+      [`PRE_UPGRADE_AUDIT.md`](docs/operations/PRE_UPGRADE_AUDIT.md) and
+      `UPG-01` from the exact published `:2` artifacts on both architectures.
+- [ ] Run
+      [`RESOURCE_PROFILE.production-v1.json`](docs/testing/RESOURCE_PROFILE.production-v1.json)
+      on physical x86_64 and aarch64 devices, complete both 24-hour soaks, and
+      derive reviewed hardware guidance from the measurements before adding
+      requirements or operational sizing claims.
 - [ ] Track an upstream Start SDK fix for the 2.0.9 PostgreSQL restore error
       path that can include the database password in local argv/log output.
       Until resolved, treat exported restore diagnostics as sensitive.

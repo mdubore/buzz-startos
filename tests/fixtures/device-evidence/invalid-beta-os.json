@@ -1,0 +1,6 @@
+{
+  "extends": "valid-artifact.json",
+  "replace": {
+    "/device/startos/reportedVersion": "0.4.0-beta.10"
+  }
+}

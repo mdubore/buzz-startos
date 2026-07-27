@@ -1,0 +1,104 @@
+{
+  "$schema": "./DEVICE_EVIDENCE.schema.json",
+  "schemaVersion": 1,
+  "example": true,
+  "gateId": "ART-01",
+  "status": "not-run",
+  "releaseCandidate": {
+    "tag": "v0.0.0_0",
+    "packageVersion": "0.0.0:0",
+    "packageCommit": "0000000000000000000000000000000000000000",
+    "upstreamCommit": "0000000000000000000000000000000000000000",
+    "archive": {
+      "name": "buzz_x86_64.s9pk",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 1
+    },
+    "signerFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "manifestMinimumStartos": "0.4.0-beta.10",
+    "sdkVersion": "2.0.9"
+  },
+  "device": {
+    "architecture": "x86_64",
+    "role": "primary",
+    "model": "Example only; replace with the observed device model",
+    "cpu": "Example only; replace with the observed CPU",
+    "cores": 1,
+    "memoryBytes": 1,
+    "storage": [
+      {
+        "model": "Example only; replace with the observed storage model",
+        "kind": "other",
+        "capacityBytes": 1
+      }
+    ],
+    "virtualization": "physical",
+    "kernelVersion": "example-only",
+    "startos": {
+      "releaseLine": "0.4.0",
+      "reportedVersion": "0.4.0",
+      "buildId": "example-only",
+      "officialSource": "https://example.invalid/startos/v0.4.0",
+      "imageSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "execution": {
+    "startedAt": "2000-01-01T00:00:00Z",
+    "completedAt": "2000-01-01T00:01:00Z",
+    "operator": "@example-operator",
+    "clientVersions": {
+      "startCli": "replace-with-observed-version",
+      "buzzDesktop": "replace-with-observed-version"
+    },
+    "commands": []
+  },
+  "stateHashes": {
+    "before": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "after": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "assertions": [
+    {
+      "id": "artifact.checksum",
+      "expected": "Published checksum matches",
+      "observed": "Not executed; example only",
+      "outcome": "not-run",
+      "evidenceIds": []
+    },
+    {
+      "id": "artifact.signature",
+      "expected": "S9PK signature verifies",
+      "observed": "Not executed; example only",
+      "outcome": "not-run",
+      "evidenceIds": []
+    },
+    {
+      "id": "artifact.signer",
+      "expected": "Signer matches the reviewed fingerprint",
+      "observed": "Not executed; example only",
+      "outcome": "not-run",
+      "evidenceIds": []
+    },
+    {
+      "id": "artifact.manifest",
+      "expected": "Manifest matches the candidate",
+      "observed": "Not executed; example only",
+      "outcome": "not-run",
+      "evidenceIds": []
+    },
+    {
+      "id": "artifact.architecture",
+      "expected": "Archive contains only native images",
+      "observed": "Not executed; example only",
+      "outcome": "not-run",
+      "evidenceIds": []
+    }
+  ],
+  "evidence": [],
+  "issues": [],
+  "review": {
+    "reviewer": "@example-reviewer",
+    "reviewedAt": "2000-01-01T00:02:00Z",
+    "decision": "pending",
+    "notes": "Template only; this is not device evidence."
+  }
+}

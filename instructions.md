@@ -12,6 +12,8 @@ Buzz community and is used in authentication, media, and Git links.
 
 - [Upstream Buzz documentation](https://github.com/block/buzz#readme) -
   product capabilities, supported clients, and upstream usage.
+- [Published `:2` pre-upgrade audit][pre-upgrade-audit] -
+  required recovery and channel-authority checks before updating that revision.
 
 ## Getting Set Up
 
@@ -62,6 +64,13 @@ preserve the database, object storage, wrapper state, Redis continuity data,
 canonical URL, owner identity, and stable service secrets, but this behavior
 has not yet been proven by a restore on a real StartOS device.
 
+Before updating the published `:2` revision, complete
+[`PRE_UPGRADE_AUDIT.md`][pre-upgrade-audit]. It requires a
+verified backup and clean-target restore, and confirmation that an active owner
+exists in every channel. Stop if a channel has no active owner or has unexplained
+role changes. The updater will not automatically promote an arbitrary owner;
+governance repair requires a separate, explicitly reviewed recovery procedure.
+
 ## Limitations
 
 - Media files are available to anyone who has their content-addressed Buzz
@@ -70,3 +79,5 @@ has not yet been proven by a restore on a real StartOS device.
 - Hosted/background iOS push delivery is disabled; normal relay connectivity
   is unaffected.
 - The upstream admin web application and full browser client are not enabled.
+
+[pre-upgrade-audit]: https://github.com/mdubore/buzz-startos/blob/main/docs/operations/PRE_UPGRADE_AUDIT.md

@@ -11,9 +11,10 @@
 > published `:2` artifacts are unsuitable for production. A new package
 > revision must sync the fix and pass the StartOS device matrix.
 
-This repository packages the Buzz relay and its data services for the StartOS
-v0.4.0 release line. The SDK-generated package manifest currently requires
-StartOS `0.4.0-beta.10`.
+This repository packages the Buzz relay and its data services for the official
+stable StartOS `0.4.0` release. Production acceptance targets an exact stable
+device build; the SDK-generated manifest minimum `0.4.0-beta.10` is only a
+compatibility floor and does not count as device validation.
 
 ## What Buzz Is
 
@@ -260,7 +261,9 @@ or later MinIO failure prevents a healthy service state.
   output if password restoration fails. Do not publish or attach unredacted
   restore diagnostics.
 - **Resource requirements are not declared yet.** CPU, memory, and disk
-  measurements remain part of on-device validation.
+  measurements remain part of the fixed
+  [`production-v1` resource profile](docs/testing/RESOURCE_PROFILE.production-v1.json);
+  see [`RESOURCE_SIZING.md`](docs/operations/RESOURCE_SIZING.md).
 
 ## Upstream And Reproducibility
 
@@ -320,6 +323,7 @@ npm run prettier:check
 npm run check
 node node_modules/@start9labs/start-sdk/lint.mjs
 npm run verify:images
+npm run verify:device-evidence
 npm run build
 
 make x86
@@ -339,9 +343,9 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
 
 ## Status
 
-- The automated suite contains 130 tests covering identity, immutable URL
-  state, secrets, runtime configuration, daemon health, membership
-  serialization, backup policy, and release workflow policy.
+- The automated suite covers identity, immutable URL state, secrets, runtime
+  configuration, daemon health, membership serialization, backup policy,
+  release workflow policy, and production evidence validation.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
 - The public
@@ -355,27 +359,29 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
   `72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638`
   for aarch64. See the release's
   [`PUBLISHED-ARTIFACT-VERIFICATION.md`](https://github.com/mdubore/buzz-startos/releases/download/v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2/PUBLISHED-ARTIFACT-VERIFICATION.md).
-- All 26 StartOS device-matrix cells remain **NOT RUN**. Install, client,
-  media, Git, restart, failure, backup/restore, and resource behavior remain
-  unproven on both architectures.
+- All 46 StartOS device-matrix cells remain **NOT RUN**. Install, client,
+  authorization, media, Git, persistence, failure, backup/restore, upgrade,
+  lifecycle, and resource behavior remain unproven on both architectures.
 - At final verification on 2026-07-27, upstream `main` was 22 commits beyond
   `dd222a5` and included an authorization security fix. A new runtime-contract
   review, image-pin refresh, package revision, and device validation are
   required before stable use.
 - This package has not been published to a registry.
 
-See [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md)
-for the evidence checklist.
+See [`DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md) for current
+status and [`DEVICE_TEST_RUNBOOK.md`](docs/testing/DEVICE_TEST_RUNBOOK.md) for
+the ordered evidence procedure. Updating from the published `:2` revision also
+requires [`PRE_UPGRADE_AUDIT.md`](docs/operations/PRE_UPGRADE_AUDIT.md).
 
 ## AI Quick Reference
 
 ```yaml
 package_id: buzz
 purpose: private Buzz relay and backend for a Nostr-signed human/agent workspace
-startos_target: v0.4.0 release line
+startos_target: official stable v0.4.0
 minimum_startos: "0.4.0-beta.10"
 release_status: "prerelease; sideload only; not production-ready"
-device_validation: "26 matrix cells NOT RUN"
+device_validation: "46 matrix cells NOT RUN"
 upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
 security_status: ":2 predates unauthorized role-change fix 00ecf2c"
 full_client:

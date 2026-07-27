@@ -6,7 +6,8 @@
     "test": "tsx --test tests/*.test.ts",
     "prettier": "prettier --write startos tests scripts",
     "prettier:check": "prettier --check startos tests scripts",
-    "verify:images": "tsx scripts/verify-images.ts"
+    "verify:images": "tsx scripts/verify-images.ts",
+    "verify:device-evidence": "tsx scripts/validate-device-evidence.ts"
   },
   "dependencies": {
     "@start9labs/start-sdk": "2.0.9",
@@ -15,6 +16,8 @@
   "devDependencies": {
     "@types/node": "^22.19.0",
     "@vercel/ncc": "^0.38.4",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "prettier": "^3.6.2",
     "tsx": "4.23.1",
     "typescript": "^6.0.3"

@@ -1,0 +1,6 @@
+{
+  "extends": "./valid-artifact.json",
+  "replace": {
+    "/assertions/0/evidenceIds": []
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "$schema": "../../../docs/testing/DEVICE_EVIDENCE.schema.json",
+  "schemaVersion": 1,
+  "example": false,
+  "gateId": "ART-01",
+  "status": "pass",
+  "releaseCandidate": {
+    "tag": "v0.2.1_0",
+    "packageVersion": "0.2.1:0",
+    "packageCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "upstreamCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "archive": {
+      "name": "buzz_x86_64.s9pk",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "sizeBytes": 239830138
+    },
+    "signerFingerprint": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "manifestMinimumStartos": "0.4.0-beta.10",
+    "sdkVersion": "2.0.9"
+  },
+  "device": {
+    "architecture": "x86_64",
+    "role": "primary",
+    "model": "Evidence fixture x86 server",
+    "cpu": "Evidence fixture CPU",
+    "cores": 4,
+    "memoryBytes": 8589934592,
+    "storage": [
+      {
+        "model": "Evidence fixture SSD",
+        "kind": "ssd",
+        "capacityBytes": 137438953472
+      }
+    ],
+    "virtualization": "physical",
+    "kernelVersion": "7.0.7",
+    "startos": {
+      "releaseLine": "0.4.0",
+      "reportedVersion": "0.4.0",
+      "buildId": "0.4.0-evidence-fixture",
+      "officialSource": "https://example.test/startos/v0.4.0",
+      "imageSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  },
+  "execution": {
+    "startedAt": "2026-07-27T16:00:00Z",
+    "completedAt": "2026-07-27T16:05:00Z",
+    "operator": "@fixture-operator",
+    "clientVersions": {
+      "startCli": "1.1.0",
+      "buzzDesktop": "fixture"
+    },
+    "commands": [
+      {
+        "program": "sha256sum",
+        "args": ["buzz_x86_64.s9pk"],
+        "exitCode": 0
+      }
+    ]
+  },
+  "stateHashes": {
+    "before": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "after": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "assertions": [
+    {
+      "id": "artifact.checksum",
+      "expected": "Published checksum matches",
+      "observed": "Checksum matched",
+      "outcome": "pass",
+      "evidenceIds": ["artifact-verification"]
+    },
+    {
+      "id": "artifact.signature",
+      "expected": "S9PK signature verifies",
+      "observed": "Signature verified",
+      "outcome": "pass",
+      "evidenceIds": ["artifact-verification"]
+    },
+    {
+      "id": "artifact.signer",
+      "expected": "Signer matches the reviewed fingerprint",
+      "observed": "Signer matched",
+      "outcome": "pass",
+      "evidenceIds": ["artifact-verification"]
+    },
+    {
+      "id": "artifact.manifest",
+      "expected": "Manifest matches the candidate",
+      "observed": "Manifest matched",
+      "outcome": "pass",
+      "evidenceIds": ["artifact-verification"]
+    },
+    {
+      "id": "artifact.architecture",
+      "expected": "Archive contains native x86_64 images",
+      "observed": "Native architecture matched",
+      "outcome": "pass",
+      "evidenceIds": ["artifact-verification"]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "artifact-verification",
+      "kind": "log",
+      "uri": "https://example.test/evidence/artifact-verification.txt",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "redacted": true,
+      "containsSecrets": false
+    }
+  ],
+  "issues": [],
+  "review": {
+    "reviewer": "@fixture-reviewer",
+    "reviewedAt": "2026-07-27T17:00:00Z",
+    "decision": "approved",
+    "notes": "Synthetic test fixture only."
+  }
+}

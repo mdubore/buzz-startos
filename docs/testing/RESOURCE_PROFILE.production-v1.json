@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "profileId": "production-v1",
+  "description": "Fixed representative acceptance workload; not a supported-capacity or minimum-hardware claim.",
+  "workload": {
+    "identities": 20,
+    "channels": 10,
+    "signedEvents": 100000,
+    "mediaObjects": 1000,
+    "mediaBytes": 10737418240,
+    "gitRepositories": 5,
+    "gitCommits": 1000,
+    "gitBytes": 2147483648,
+    "concurrency": {
+      "websocketConnections": 20,
+      "publishers": 10,
+      "readers": 10,
+      "mediaWorkers": 2,
+      "gitWorkers": 2
+    }
+  },
+  "protocol": {
+    "sampleIntervalSeconds": 5,
+    "coldStarts": 5,
+    "warmupMinutes": 10,
+    "idleMinutes": 30,
+    "loadMinutes": 60,
+    "soakHours": 24,
+    "differentialDataIncreasePercent": 10,
+    "phases": [
+      "cold-start",
+      "idle",
+      "representative-load",
+      "full-backup",
+      "differential-backup",
+      "clean-target-restore",
+      "soak"
+    ]
+  },
+  "requiredMeasurements": [
+    "host-cpu",
+    "process-cpu-by-container",
+    "host-memory",
+    "process-rss-by-container",
+    "volume-bytes",
+    "disk-read-write-bytes",
+    "network-receive-transmit-bytes",
+    "healthy-startup-seconds",
+    "request-latency",
+    "request-error-count",
+    "backup-seconds-and-bytes",
+    "restore-seconds-and-bytes",
+    "unexpected-restart-count",
+    "state-inventory-hash"
+  ],
+  "acceptance": {
+    "maximumHealthyStartupSeconds": 180,
+    "unexpectedFailures": 0,
+    "stateMismatches": 0
+  },
+  "hardwareMinimums": null
+}
