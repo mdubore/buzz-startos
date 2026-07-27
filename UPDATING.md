@@ -316,6 +316,52 @@ Then run the live tag-drift and metadata checks:
 )
 ```
 
+## Vulnerability Review Gate
+
+Run dependency integrity and policy checks after every lockfile, SDK, image, or
+runtime-entrypoint change:
+
+```bash
+(
+  set -euo pipefail
+
+  source "$HOME/.nvm/nvm.sh"
+  nvm use 22.23.1
+  npm ci
+  npm run audit:signatures
+  npm run build
+  npm run audit:vulnerabilities
+
+  # Requires checksum-verified Grype 0.116.0 on PATH.
+  npm run scan:images -- runtime-scan-results
+)
+```
+
+`security/vulnerability-waivers.json` is a fail-closed exception ledger, not a
+suppression list. Each high-severity waiver names one advisory and installed
+component, lists every affected path or immutable image digest, documents
+runtime reachability and a compensating control, assigns an owner and tracking
+issue, and expires within 90 days. Critical findings cannot be waived. The
+checker also rejects stale waivers, changed paths, new findings, and
+tooling-only npm code that appears in the compiled runtime bundle.
+
+The current npm exceptions are limited to ESLint and TypeScript ESLint
+dependencies bundled by Start SDK 2.0.9 and tracked in
+[Start9Labs/start-technologies#3592](https://github.com/Start9Labs/start-technologies/issues/3592).
+Replace the SDK and remove the waivers as soon as a compatible fixed release is
+available. Do not run `npm audit fix` or add a broad lockfile override without
+rebuilding, linting, and device-testing the package.
+
+The image scanner records its exact target manifest, Grype database status,
+and one JSON report for each of the ten native platform digests. Review every
+new high or critical image finding before updating a pin. Add an OCI waiver
+only when the installed component and affected image digests have been
+independently verified; never waive a moving tag.
+
+The diagnostic
+[`dd222a5` runtime baseline](docs/security/dd222a5-runtime-scan.md) records why
+the existing Buzz image is blocked. It is not evidence for a newer candidate.
+
 ## 7. Update Package Metadata
 
 Update these package-owned sources in one reviewed change:
