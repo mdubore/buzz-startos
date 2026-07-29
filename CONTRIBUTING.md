@@ -16,6 +16,19 @@ Buzz application changes belong upstream:
 The frozen application/runtime evidence is under `docs/upstream/`. Follow
 [`UPDATING.md`](UPDATING.md) for a new upstream snapshot.
 
+## Security Reports
+
+Follow the [security policy](SECURITY.md) and use GitHub private vulnerability
+reporting for unresolved security issues. Do not disclose vulnerabilities,
+credentials, private signing material, or unsanitized restore diagnostics in a
+public issue or pull request.
+
+Release maintainers must follow the
+[signing-key runbook](docs/security/SIGNING-KEY-RUNBOOK.md) and verify the
+[repository controls](docs/security/REPOSITORY-CONTROLS.md) before production
+publication. A documented blocker remains a blocker even when the package
+builds successfully.
+
 ## Development Environment
 
 Use a StartOS packaging workspace with the package, `buzz9`,

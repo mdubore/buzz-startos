@@ -16,7 +16,7 @@ jobs:
   preflight:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -37,8 +37,47 @@ jobs:
     with:
       signed_release: true
 
-  signed-build:
+  reserve-release:
     needs: signed-package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reserve create-once release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          NOTES_FILE="$GITHUB_WORKSPACE/docs/releases/${GITHUB_REF_NAME}.md"
+          test -s "$NOTES_FILE"
+          set +e
+          EXISTING="$(
+            gh api \
+              "repos/$GH_REPO/releases/tags/$GITHUB_REF_NAME" 2>&1
+          )"
+          STATUS=$?
+          set -e
+          if [[ "$STATUS" -eq 0 ]]; then
+            printf 'release identity is already reserved: %s\n' \
+              "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          if [[ "$EXISTING" != *'HTTP 404'* ]]; then
+            printf 'could not prove the release identity is unused\n' >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --notes-file "$NOTES_FILE"
+
+  signed-build:
+    needs: reserve-release
     runs-on: ubuntu-24.04
     environment: release
     strategy:
@@ -53,11 +92,11 @@ jobs:
             archive: buzz_aarch64.s9pk
             artifact: buzz-arm
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.23.1
           cache: npm
@@ -99,24 +138,20 @@ jobs:
       - name: Compile package entrypoint
         run: npm run build
 
-      - name: Provision protected signing identity
-        env:
-          DEV_KEY: ${{ secrets.DEV_KEY }}
+      - name: Prepare protected signer paths
         run: |
-          test -n "${DEV_KEY:-}"
           umask 077
           mkdir -p "$HOME/.startos" "$GITHUB_WORKSPACE/.startos"
           chmod 0700 "$HOME/.startos" "$GITHUB_WORKSPACE/.startos"
-          printf '%s' "$DEV_KEY" > "$HOME/.startos/id.key.pem"
-          cp \
-            "$HOME/.startos/id.key.pem" \
-            "$GITHUB_WORKSPACE/.startos/build.key.pem"
-          chmod 0600 \
-            "$HOME/.startos/id.key.pem" \
-            "$GITHUB_WORKSPACE/.startos/build.key.pem"
 
       - name: Build signed ${{ matrix.target }} package
-        run: make "${{ matrix.target }}"
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          ./scripts/with-release-signer.sh \
+            "$HOME/.startos/id.key.pem" \
+            "$GITHUB_WORKSPACE/.startos/build.key.pem" \
+            make "${{ matrix.target }}"
 
       - name: Verify package output
         run: |
@@ -132,7 +167,7 @@ jobs:
       - name: Print package checksum
         run: sha256sum -- '${{ matrix.archive }}'
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.archive }}
@@ -154,7 +189,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -169,7 +204,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
           test -s "docs/releases/${GITHUB_REF_NAME}.md"
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: downloads
           pattern: buzz-*
@@ -230,24 +265,19 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ARTIFACT_DIR="$RUNNER_TEMP/release-artifacts"
-          NOTES_FILE="$GITHUB_WORKSPACE/docs/releases/${GITHUB_REF_NAME}.md"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" \
-              "$ARTIFACT_DIR"/*.s9pk \
-              "$ARTIFACT_DIR/SHA256SUMS" \
-              "$ARTIFACT_DIR/SIGNING-PUBKEY.pem" \
-              "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256" \
-              --clobber
-            gh release edit "$GITHUB_REF_NAME" \
-              --prerelease --notes-file "$NOTES_FILE"
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              "$ARTIFACT_DIR"/*.s9pk \
-              "$ARTIFACT_DIR/SHA256SUMS" \
-              "$ARTIFACT_DIR/SIGNING-PUBKEY.pem" \
-              "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256" \
-              --verify-tag --prerelease --notes-file "$NOTES_FILE"
-          fi
+          test "$(
+            gh release view "$GITHUB_REF_NAME" \
+              --json isDraft \
+              --jq '.isDraft'
+          )" = 'true'
+          gh release upload "$GITHUB_REF_NAME" \
+            "$ARTIFACT_DIR"/*.s9pk \
+            "$ARTIFACT_DIR/SHA256SUMS" \
+            "$ARTIFACT_DIR/SIGNING-PUBKEY.pem" \
+            "$ARTIFACT_DIR/SIGNING-PUBKEY.sha256"
+          gh release edit "$GITHUB_REF_NAME" \
+            --draft=false \
+            --prerelease
 
       - name: Remove prepared release artifacts
         if: ${{ always() }}
