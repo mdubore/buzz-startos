@@ -59,11 +59,11 @@ PostgreSQL and Redis services, and explicitly execute the ignored Buzz database
 and relay authorization regressions. This is in addition to the downstream
 unit, type, lint, image metadata, and package-build checks.
 
-Every native runtime image will receive vulnerability and SBOM analysis. High
-or critical findings must either be fixed or recorded in a time-bounded,
-owner-assigned waiver that states runtime reachability and compensating
-controls. JavaScript dependency auditing follows the same rule; an automated
-fix is not accepted without package verification.
+Every native runtime image will receive vulnerability and SBOM analysis.
+Critical findings must be fixed. High findings must either be fixed or recorded
+in a time-bounded, owner-assigned waiver that states runtime reachability and
+compensating controls. JavaScript dependency auditing follows the same rule; an
+automated fix is not accepted without package verification.
 
 Previously installed `:2` systems require a verified backup and a membership
 audit before upgrade. The runbook will require at least one verified active

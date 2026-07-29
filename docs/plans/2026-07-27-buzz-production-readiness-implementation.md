@@ -192,6 +192,7 @@ git commit -m "ci: gate upstream authorization regressions"
 **Files:**
 - Modify: `package.json`
 - Modify: `package-lock.json`
+- Create: `security/grype-ci.yaml`
 - Create: `security/vulnerability-waivers.json`
 - Create: `scripts/check-vulnerability-waivers.ts`
 - Create: `scripts/scan-runtime-images.sh`
@@ -224,9 +225,12 @@ than running a blind `npm audit fix`.
 
 **Step 4: Add native image scanning**
 
-Install a checksum-pinned scanner, scan all five amd64 and five arm64 immutable
-digests, emit machine-readable reports, and fail on unwaived high/critical
-runtime findings.
+Install checksum-pinned Grype 0.116.0. Remove inherited Grype and Syft
+environment settings, use an isolated home and explicit reviewed config, then
+scan all five amd64 and five arm64 immutable digests with an explicit platform.
+Retain the scanner version, effective config, exact database status, target
+manifest, and machine-readable reports. Cross-check that evidence and reject
+all ignored matches, critical findings, and unwaived high findings.
 
 **Step 5: Verify and commit**
 

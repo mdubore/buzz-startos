@@ -337,13 +337,14 @@ runtime-entrypoint change:
 )
 ```
 
-`security/vulnerability-waivers.json` is a fail-closed exception ledger, not a
-suppression list. Each high-severity waiver names one advisory and installed
-component, lists every affected path or immutable image digest, documents
-runtime reachability and a compensating control, assigns an owner and tracking
-issue, and expires within 90 days. Critical findings cannot be waived. The
-checker also rejects stale waivers, changed paths, new findings, and
-tooling-only npm code that appears in the compiled runtime bundle.
+`security/vulnerability-waivers.json` is the only exception mechanism; scanner
+suppression is forbidden. Each high-severity waiver names one advisory and
+installed component, lists every affected path or immutable image digest,
+documents runtime reachability and a compensating control, assigns an owner and
+tracking issue, and expires within 90 days. Critical findings cannot be waived.
+The checker also rejects stale waivers, changed paths, new findings, nonempty
+Grype `ignoredMatches`, inconsistent npm audit summary counts, and tooling-only
+npm code that appears in the compiled runtime bundle.
 
 The current npm exceptions are limited to ESLint and TypeScript ESLint
 dependencies bundled by Start SDK 2.0.9 and tracked in
@@ -352,11 +353,17 @@ Replace the SDK and remove the waivers as soon as a compatible fixed release is
 available. Do not run `npm audit fix` or add a broad lockfile override without
 rebuilding, linting, and device-testing the package.
 
-The image scanner records its exact target manifest, Grype database status,
-and one JSON report for each of the ten native platform digests. Review every
-new high or critical image finding before updating a pin. Add an OCI waiver
-only when the installed component and affected image digests have been
-independently verified; never waive a moving tag.
+The image scanner removes inherited `GRYPE_*` and `SYFT_*` settings, uses an
+isolated home, and passes the reviewed `security/grype-ci.yaml` to every Grype
+0.116.0 operation. It records the scanner version, full effective
+configuration, exact database identity and status, exact target manifest, and
+one JSON report for each of the ten native platform digests. The checker binds
+each report to its pinned digest, requested `linux/amd64` or `linux/arm64`
+platform, scanner build, database, and configuration. Missing or inconsistent
+evidence fails closed. Review every new high or critical image finding before
+updating a pin. Add an OCI waiver only when the installed component and
+affected image digests have been independently verified; never waive a moving
+tag.
 
 The diagnostic
 [`dd222a5` runtime baseline](docs/security/dd222a5-runtime-scan.md) records why

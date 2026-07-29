@@ -40,11 +40,50 @@ test('scanner requires pinned Grype, records database status, and runs policy', 
 
   assert.match(script, /^#!\/usr\/bin\/env bash\nset -euo pipefail\n/)
   assert.match(script, /EXPECTED_GRYPE_VERSION=['"]0\.116\.0['"]/)
+  assert.match(script, /compgen -e/)
+  assert.match(script, /GRYPE_\*\|SYFT_\*/)
+  assert.match(script, /unset "\$variable"/)
+  assert.match(script, /XDG_CONFIG_HOME/)
+  assert.match(script, /trusted_config=.*security\/grype-ci\.yaml/)
+  assert.match(
+    script,
+    /run_grype\(\)[\s\S]*command grype --config "\$trusted_config" "\$@"/,
+  )
   assert.match(script, /grype-version\.json/)
-  assert.match(script, /grype db update[\s\S]*grype db status/)
+  assert.match(script, /grype-effective-config\.yaml/)
+  assert.match(script, /run_grype db update[\s\S]*run_grype db status/)
+  assert.match(script, /--platform "linux\/\$architecture"/)
   assert.match(script, /runtime-image-targets\.ts/)
   assert.match(script, /check-vulnerability-waivers\.ts grype/)
   assert.doesNotMatch(script, /--fail-on\s+(?:critical|medium|low)/)
+
+  const directCalls = script
+    .split('\n')
+    .filter((line) => /^\s*(?:command\s+)?grype(?:\s|$)/.test(line))
+  assert.deepEqual(directCalls, [
+    '  command grype --config "$trusted_config" "$@"',
+  ])
+})
+
+test('trusted Grype config cannot suppress scanner findings', () => {
+  const config = readFileSync(
+    new URL('../security/grype-ci.yaml', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(config, /^check-for-app-update: false$/m)
+  assert.match(config, /^only-fixed: false$/m)
+  assert.match(config, /^only-notfixed: false$/m)
+  assert.match(config, /^ignore-wontfix: ''$/m)
+  assert.match(config, /^ignore: \[\]$/m)
+  assert.match(config, /^exclude: \[\]$/m)
+  assert.match(config, /^vex-documents: \[\]$/m)
+  assert.match(config, /^vex-add: \[\]$/m)
+  assert.match(config, /^match-upstream-kernel-headers: true$/m)
+  assert.match(config, /^default-image-pull-source: registry$/m)
+  assert.match(config, /^  auto-update: false$/m)
+  assert.match(config, /^  validate-by-hash-on-start: true$/m)
+  assert.match(config, /^  validate-age: true$/m)
 })
 
 test('package workflow gates npm and OCI risk with checksum-pinned tooling', () => {
