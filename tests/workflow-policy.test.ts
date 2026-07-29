@@ -33,6 +33,10 @@ const releaseWorkflow = readFileSync(
   new URL('../.github/workflows/release.yml', import.meta.url),
   'utf8',
 )
+const securityDriftWorkflow = readFileSync(
+  new URL('../.github/workflows/security-drift.yml', import.meta.url),
+  'utf8',
+)
 
 type WorkflowRecord = Record<string, unknown>
 
@@ -206,7 +210,7 @@ test('only release.yml signed-build obtains the protected signing secret', () =>
   assert.match(signedBuild, /\n    needs: reserve-release\n/)
   assert.match(signedBuild, /\n    environment: release\n/)
   assert.match(signedBuild, /DEV_KEY: \$\{\{ secrets\.DEV_KEY \}\}/)
-  assert.match(finalizer, /\n    needs: signed-build\n/)
+  assert.match(finalizer, /\n    needs: verify-attested-release\n/)
   assert.equal(releaseWorkflow.match(/secrets\.DEV_KEY/g)?.length, 1)
   assert.doesNotMatch(buildWorkflow, /\bsecrets:/)
   assert.doesNotMatch(
@@ -325,6 +329,9 @@ writeFileSync(process.argv[4], 'clean child environment\\n')
 test('release workflow reserves one durable draft before signing and never clobbers', () => {
   const reserve = workflowJob(releaseWorkflow, 'reserve-release')
   const signer = workflowJob(releaseWorkflow, 'signed-build')
+  const assembly = workflowJob(releaseWorkflow, 'assemble-release')
+  const attestation = workflowJob(releaseWorkflow, 'attest-release')
+  const verifier = workflowJob(releaseWorkflow, 'verify-attested-release')
   const finalizer = workflowJob(releaseWorkflow, 'finalize-prerelease')
 
   assert.match(reserve, /\n    needs: signed-package\n/)
@@ -333,10 +340,106 @@ test('release workflow reserves one durable draft before signing and never clobb
   assert.match(reserve, /gh release create/)
   assert.match(reserve, /--draft/)
   assert.match(signer, /\n    needs: reserve-release\n/)
-  assert.match(finalizer, /\n    needs: signed-build\n/)
+  assert.match(assembly, /\n    needs: signed-build\n/)
+  assert.match(attestation, /\n    needs: assemble-release\n/)
+  assert.match(verifier, /\n    needs: attest-release\n/)
+  assert.match(finalizer, /\n    needs: verify-attested-release\n/)
   assert.doesNotMatch(releaseWorkflow, /--clobber/)
   assert.equal(releaseWorkflow.match(/gh release create/g)?.length, 1)
   assert.equal(releaseWorkflow.match(/gh release upload/g)?.length, 1)
+})
+
+test('release publication never restores dependency caches', () => {
+  assert.doesNotMatch(releaseWorkflow, /cache: npm/)
+  assert.equal(
+    releaseWorkflow.match(/package-manager-cache: false/g)?.length,
+    3,
+  )
+})
+
+test('release assembles, verifies, attests, and publishes the complete evidence set', () => {
+  const runtimeSbom = workflowJob(packageWorkflow, 'runtime-sbom')
+  const assembly = workflowJob(releaseWorkflow, 'assemble-release')
+  const attestation = workflowJob(releaseWorkflow, 'attest-release')
+  const verifier = workflowJob(releaseWorkflow, 'verify-attested-release')
+  const finalizer = workflowJob(releaseWorkflow, 'finalize-prerelease')
+
+  assert.match(runtimeSbom, /\n    needs: verify\n/)
+  assert.match(runtimeSbom, /syft_1\.49\.0_linux_amd64\.tar\.gz/)
+  assert.match(
+    runtimeSbom,
+    /7aa2f03ee92739cf643279ba3990548b9925d4e22cae13f46831ee62821147fe/,
+  )
+  assert.match(runtimeSbom, /cyclonedx-linux-x64/)
+  assert.match(
+    runtimeSbom,
+    /454879e6a4a405c8a13bff49b8982adcb0596f3019b26b0811c66e4d7f0783e1/,
+  )
+  assert.match(runtimeSbom, /generate-sboms\.sh runtime-sboms/)
+  assert.match(runtimeSbom, /name: runtime-sboms/)
+
+  assert.match(assembly, /\n    needs: signed-build\n/)
+  assert.match(assembly, /name: runtime-vulnerability-reports/)
+  assert.match(assembly, /name: runtime-sboms/)
+  assert.match(assembly, /prepare-release-assets\.sh/)
+  assert.match(assembly, /name: release-assets/)
+
+  assert.match(attestation, /\n    needs: assemble-release\n/)
+  assert.match(attestation, /\n      id-token: write\n/)
+  assert.match(attestation, /\n      attestations: write\n/)
+  assert.doesNotMatch(attestation, /\n      contents: write\n/)
+  assert.match(
+    attestation,
+    /actions\/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6/,
+  )
+  assert.match(attestation, /subject-path: release-assets\/\*/)
+
+  assert.match(verifier, /\n    needs: attest-release\n/)
+  assert.match(verifier, /\n      contents: read\n/)
+  assert.doesNotMatch(verifier, /\n      contents: write\n/)
+  assert.match(verifier, /verify-release-assets\.sh/)
+  assert.match(verifier, /gh attestation verify/)
+  assert.match(
+    verifier,
+    /--signer-workflow "\$GH_REPO\/\.github\/workflows\/release\.yml"/,
+  )
+  assert.match(verifier, /--signer-digest "\$GITHUB_SHA"/)
+  assert.match(verifier, /--source-digest "\$GITHUB_SHA"/)
+  assert.match(verifier, /--source-ref "\$GITHUB_REF"/)
+  assert.match(verifier, /--deny-self-hosted-runners/)
+  assert.match(finalizer, /\n    needs: verify-attested-release\n/)
+  assert.match(finalizer, /\n      contents: write\n/)
+  assert.doesNotMatch(
+    finalizer,
+    /npm ci|verify-release-assets|actions\/checkout/,
+  )
+  assert.match(finalizer, /"\$ARTIFACT_DIR"\/\*/)
+  assert.doesNotMatch(finalizer, /SIGNING-PUBKEY\.pem" \\\n/)
+})
+
+test('scheduled security drift checks upstream, dependencies, images, and vulnerabilities', () => {
+  const readme = repositoryFile('README.md')
+  const workflow = parseWorkflow('security-drift.yml', securityDriftWorkflow)
+
+  assert.ok(isRecord(workflow.permissions))
+  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.match(securityDriftWorkflow, /\n  schedule:\n    - cron: '[^']+'\n/)
+  assert.match(securityDriftWorkflow, /\n  workflow_dispatch:\n/)
+  assert.match(securityDriftWorkflow, /https:\/\/github\.com\/block\/buzz\.git/)
+  assert.match(
+    securityDriftWorkflow,
+    /https:\/\/github\.com\/mdubore\/buzz9\.git/,
+  )
+  assert.match(securityDriftWorkflow, /npm run audit:signatures/)
+  assert.match(securityDriftWorkflow, /npm run audit:vulnerabilities/)
+  assert.match(securityDriftWorkflow, /npm run verify:images/)
+  assert.match(securityDriftWorkflow, /npm run scan:images/)
+  assert.match(securityDriftWorkflow, /if: \$\{\{ always\(\) \}\}/)
+  assert.match(securityDriftWorkflow, /name: scheduled-vulnerability-reports/)
+  assert.match(
+    readme,
+    /actions\/workflows\/security-drift\.yml\/badge\.svg\?branch=main/,
+  )
 })
 
 test('repository audit collects every control failure before exiting', () => {
@@ -441,11 +544,13 @@ test('build, package, and release workflows use reviewed Node 24 action pins', (
     'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
     'actions/upload-artifact': '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     'actions/download-artifact': '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
+    'actions/attest': 'f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
   }
   for (const [name, workflow] of [
     ['build.yml', buildWorkflow],
     ['package.yml', packageWorkflow],
     ['release.yml', releaseWorkflow],
+    ['security-drift.yml', securityDriftWorkflow],
   ] as const) {
     for (const [, action, pin] of workflow.matchAll(
       /^\s+(?:-\s+)?uses: ([^@\s]+)@([^\s#]+)/gm,
@@ -557,9 +662,12 @@ test('security operations cover signer lifecycle and repository control gaps', (
   assert.match(controls, /second trusted reviewer/i)
   assert.match(
     controls,
-    /\|\s+Scheduled security drift workflow and README integration\s+\|\s+Deferred\s+\|/,
+    /\|\s+Scheduled security drift workflow and README integration\s+\|\s+Applied\s+\|/,
   )
-  assert.match(controls, /does not complete production security\s+automation/i)
+  assert.doesNotMatch(
+    controls,
+    /scheduled security-drift workflow and README integration\s+remain open/i,
+  )
   assert.match(controls, /environments\/release\/deployment-branch-policies/)
   assert.match(controls, /branches\/main\/protection/)
   assert.match(controls, /branches\/main\/protection\/required_signatures/)

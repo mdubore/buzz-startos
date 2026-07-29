@@ -4,6 +4,8 @@
 
 # Buzz for StartOS
 
+[![Security Drift](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml/badge.svg?branch=main)](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml)
+
 > [!WARNING]
 > The current `:2` prerelease packages the frozen Buzz snapshot `dd222a5` and
 > predates upstream fix [`00ecf2c`](https://github.com/block/buzz/commit/00ecf2cac7544d986b4eb111ad0a8b1d7560791f)
@@ -65,13 +67,13 @@ MinIO client are packaged as private subcontainers in the same service.
 
 ## StartOS Architecture
 
-| Component | StartOS purpose |
-| --- | --- |
-| Buzz | Serves the Nostr relay, HTTP APIs, WebSocket connections, limited browser routes, media gateway, and Git Smart HTTP endpoint. |
-| PostgreSQL | Stores authoritative events, communities, membership, search data, workflow state, audit history, and repository metadata. |
-| Redis | Provides pub/sub, coordination, presence, rate limiting, and NIP-98 replay state. AOF persistence is enabled for continuity. |
-| MinIO | Stores authoritative media and durable Git objects, manifests, and packs in the `buzz-media` bucket. |
-| MinIO client | Runs the idempotent bucket-creation and private-access setup one-shot, then exits. |
+| Component    | StartOS purpose                                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Buzz         | Serves the Nostr relay, HTTP APIs, WebSocket connections, limited browser routes, media gateway, and Git Smart HTTP endpoint. |
+| PostgreSQL   | Stores authoritative events, communities, membership, search data, workflow state, audit history, and repository metadata.    |
+| Redis        | Provides pub/sub, coordination, presence, rate limiting, and NIP-98 replay state. AOF persistence is enabled for continuity.  |
+| MinIO        | Stores authoritative media and durable Git objects, manifests, and packs in the `buzz-media` bucket.                          |
+| MinIO client | Runs the idempotent bucket-creation and private-access setup one-shot, then exits.                                            |
 
 All images come from upstream publishers. The exact OCI index and native
 platform digests are recorded in
@@ -82,15 +84,15 @@ not duplicate mutable tags.
 
 StartOS binds one service port:
 
-| Scope | Port | Purpose |
-| --- | ---: | --- |
+| Scope             |   Port | Purpose                                            |
+| ----------------- | -----: | -------------------------------------------------- |
 | StartOS interface | `3000` | Buzz HTTP, WebSocket relay, media, and Git traffic |
-| Internal only | `5432` | PostgreSQL |
-| Internal only | `6379` | Redis |
-| Internal only | `9000` | MinIO API |
-| Internal only | `9001` | MinIO console binding |
-| Internal only | `8080` | Buzz health endpoints |
-| Internal only | `9102` | Buzz metrics |
+| Internal only     | `5432` | PostgreSQL                                         |
+| Internal only     | `6379` | Redis                                              |
+| Internal only     | `9000` | MinIO API                                          |
+| Internal only     | `9001` | MinIO console binding                              |
+| Internal only     | `8080` | Buzz health endpoints                              |
+| Internal only     | `9102` | Buzz metrics                                       |
 
 The StartOS proxy must preserve the external `Host` header and WebSocket
 upgrades. Buzz binds each community to its canonical host; tenant-bearing HTTP
@@ -161,11 +163,11 @@ package blocks startup instead of silently substituting another host.
 
 StartOS can present three distinct blocking tasks:
 
-| Task | Meaning | Resolution |
-| --- | --- | --- |
-| Complete Initial Setup | Stable secrets exist, but owner identity and canonical URL have not been chosen. | Enter the owner key and select the permanent URL. |
-| Verify Stable State | The wrapper store is missing, unreadable, or malformed. | Restore a known-good StartOS backup, or reset and reinstall; then verify the recovered state. |
-| Verify Canonical URL | Restored state is valid, but the original URL is not currently available on the interface. | Restore that exact StartOS address, then verify it. |
+| Task                   | Meaning                                                                                    | Resolution                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Complete Initial Setup | Stable secrets exist, but owner identity and canonical URL have not been chosen.           | Enter the owner key and select the permanent URL.                                             |
+| Verify Stable State    | The wrapper store is missing, unreadable, or malformed.                                    | Restore a known-good StartOS backup, or reset and reinstall; then verify the recovered state. |
+| Verify Canonical URL   | Restored state is valid, but the original URL is not currently available on the interface. | Restore that exact StartOS address, then verify it.                                           |
 
 Stable secrets are generated only on a fresh installation. Restart, container
 rebuild, update, and restore do not rotate them.
@@ -192,11 +194,11 @@ device-test claim.
 The relay requires membership. These user-only actions are available while it
 is running:
 
-| Action | Input | Result |
-| --- | --- | --- |
-| Add Member | Nostr `npub` or hex public key; `member` or `admin` role | Admits a new normalized identity; re-adding an existing identity is a no-op and does not change its role |
-| Remove Member | Nostr `npub` or hex public key; current `member` or `admin` role | Removes the selected role |
-| List Members | None | Returns the current relay roster |
+| Action        | Input                                                            | Result                                                                                                   |
+| ------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Add Member    | Nostr `npub` or hex public key; `member` or `admin` role         | Admits a new normalized identity; re-adding an existing identity is a no-op and does not change its role |
+| Remove Member | Nostr `npub` or hex public key; current `member` or `admin` role | Removes the selected role                                                                                |
+| List Members  | None                                                             | Returns the current relay roster                                                                         |
 
 The immutable owner cannot be added or removed through membership actions.
 Add and remove operations are serialized across callers and persist their last
@@ -209,13 +211,13 @@ the disabled upstream admin dashboard/API.
 
 ## Data And Backups
 
-| Volume | Contents | Backup policy |
-| --- | --- | --- |
-| `startos` | Wrapper schema, stable secrets, owner key, canonical URL, membership scheduling timestamp | Included |
-| `postgres` | PostgreSQL data directory | Excluded as raw files; replaced by an SDK-managed logical dump and restore |
-| `redis` | Redis AOF and useful transient coordination state | Included |
-| `media` | MinIO's authoritative media and durable Git object storage | Included |
-| `git-cache` | Rebuildable Git scratch repositories and pack cache | Excluded and disposable |
+| Volume      | Contents                                                                                  | Backup policy                                                              |
+| ----------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `startos`   | Wrapper schema, stable secrets, owner key, canonical URL, membership scheduling timestamp | Included                                                                   |
+| `postgres`  | PostgreSQL data directory                                                                 | Excluded as raw files; replaced by an SDK-managed logical dump and restore |
+| `redis`     | Redis AOF and useful transient coordination state                                         | Included                                                                   |
+| `media`     | MinIO's authoritative media and durable Git object storage                                | Included                                                                   |
+| `git-cache` | Rebuildable Git scratch repositories and pack cache                                       | Excluded and disposable                                                    |
 
 PostgreSQL is authoritative for structured metadata and Nostr events. MinIO is
 authoritative for media and durable Git objects. Redis is transient but its
@@ -305,9 +307,18 @@ CI uses only reviewed, full-commit action pins and repository-local reusable
 workflows. Pull requests, main-branch pushes, and manual builds create separate
 x86_64 and aarch64 sideload artifacts with ephemeral signing identities.
 Matching version tags use the protected `release` environment to build both
-architectures with the release key, verify each signer, and publish an
-idempotent GitHub prerelease with checksums and the signing public key. The
-workflow does not publish to a StartOS registry or S3. See
+architectures with the release key, verify each signer, and reserve one
+create-once GitHub prerelease. Before publication, CI assembles and reverifies
+the two packages, closed checksum and media-type indexes, signing identity,
+CycloneDX SBOMs, Grype reports, and immutable package inspection record, then
+creates GitHub provenance attestations for every asset. The workflow does not
+publish to a StartOS registry or S3.
+
+The scheduled security-drift workflow compares `buzz9` and the packaged
+snapshot with `block/buzz`, verifies npm registry signatures and vulnerability
+policy, checks mutable image tags against immutable pins, and performs a fresh
+scan of all ten native runtime image manifests. A drift failure is a review
+signal, not permission to update or publish automatically. See
 [`UPDATING.md`](UPDATING.md) for the reviewed upstream-update procedure and
 [`docs/upstream/dd222a5-runtime-contract.md`](docs/upstream/dd222a5-runtime-contract.md)
 for the frozen runtime evidence.
@@ -319,12 +330,12 @@ The package version and localized release notes live only in
 
 The reviewed local toolchain is:
 
-| Tool | Required version | Pin or reviewed x86_64 binary checksum |
-| --- | --- | --- |
-| Node.js | `22.23.1` | Managed through NVM |
-| Start SDK | `2.0.9` | Locked by `package-lock.json` |
-| Start CLI | `1.1.0` | `70eff67b6e9a936acd8aaaf787b783819252ecedaa5c74d462e3b15ed4dd843a` |
-| Docker Buildx | `0.35.0` | `d41ece72044243b4f58b343441ae37446d9c29a7d6b5e11c61847bbcf8f7dfda` |
+| Tool          | Required version | Pin or reviewed x86_64 binary checksum                             |
+| ------------- | ---------------- | ------------------------------------------------------------------ |
+| Node.js       | `22.23.1`        | Managed through NVM                                                |
+| Start SDK     | `2.0.9`          | Locked by `package-lock.json`                                      |
+| Start CLI     | `1.1.0`          | `70eff67b6e9a936acd8aaaf787b783819252ecedaa5c74d462e3b15ed4dd843a` |
+| Docker Buildx | `0.35.0`         | `d41ece72044243b4f58b343441ae37446d9c29a7d6b5e11c61847bbcf8f7dfda` |
 
 Use a StartOS packaging workspace containing `.startos/`,
 `start-technologies/`, `buzz9/`, and this package repository. From the package
@@ -400,11 +411,11 @@ requires [`PRE_UPGRADE_AUDIT.md`](docs/operations/PRE_UPGRADE_AUDIT.md).
 package_id: buzz
 purpose: private Buzz relay and backend for a Nostr-signed human/agent workspace
 startos_target: official stable v0.4.0
-minimum_startos: "0.4.0-beta.10"
-release_status: "prerelease; sideload only; not production-ready"
-device_validation: "46 matrix cells NOT RUN"
+minimum_startos: '0.4.0-beta.10'
+release_status: 'prerelease; sideload only; not production-ready'
+device_validation: '46 matrix cells NOT RUN'
 upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
-security_status: ":2 predates unauthorized role-change fix 00ecf2c"
+security_status: ':2 predates unauthorized role-change fix 00ecf2c'
 full_client:
   required: true
   desktop: external Buzz desktop application

@@ -5,26 +5,25 @@
 This snapshot was verified against `mdubore/buzz-startos` on 2026-07-29 using
 GitHub's REST API version `2026-03-10`. "Applied" means the setting was read
 back from GitHub. "Blocked" means the intended production control is not
-enabled and must not be represented as active. "Deferred" is also open work,
-but its implementation belongs to a separately scoped vulnerability gate.
+enabled and must not be represented as active.
 
-| Control                                                  | Status   | Verified state or blocker                                                                                                                                                                 |
-| -------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vulnerability alerts                                     | Applied  | The alerts endpoint returns success.                                                                                                                                                      |
-| Automated security fixes                                 | Applied  | Enabled and not paused.                                                                                                                                                                   |
-| Dependabot security updates                              | Applied  | Repository security analysis reports enabled.                                                                                                                                             |
-| Private vulnerability reporting                          | Applied  | Enabled for private security advisories.                                                                                                                                                  |
-| Secret scanning and push protection                      | Applied  | Both controls report enabled.                                                                                                                                                             |
-| Selected GitHub-owned Actions                            | Applied  | GitHub-owned actions are allowed; verified marketplace actions and custom patterns are not.                                                                                               |
-| Full commit SHA enforcement                              | Applied  | Actions policy requires full commit pins.                                                                                                                                                 |
-| Delete head branches after merge                         | Applied  | `delete_branch_on_merge` is enabled.                                                                                                                                                      |
-| Immutable releases                                       | Blocked  | Disabled. The workflow is now create-once, but activation must wait until the reviewed workflow is merged and the remaining release controls pass.                                         |
-| `main` ruleset                                           | Blocked  | No repository ruleset exists; required check names must be observed on a real pull request first.                                                                                         |
-| Release tag ruleset                                      | Blocked  | No `v*.*` tag ruleset exists; tag creation authority and emergency bypass roles are not ready.                                                                                            |
-| Signed commits                                           | Blocked  | Cryptographic signature enforcement belongs in the pending `main` ruleset.                                                                                                                |
-| Release self-review prohibition                          | Blocked  | The sole environment reviewer cannot approve their own deployment after this is enabled; add a second trusted reviewer first.                                                             |
-| Build/package/release action runtime migration           | Applied  | `package.yml` and `release.yml` use reviewed Node 24 action releases pinned to full commits; `build.yml` invokes the reviewed reusable package workflow.                                   |
-| Scheduled security drift workflow and README integration | Deferred | `.github/workflows/security-drift.yml` and the corresponding README status integration are intentionally deferred to the vulnerability gate and remain required for production readiness. |
+| Control                                                  | Status  | Verified state or blocker                                                                                                                                                                        |
+| -------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Vulnerability alerts                                     | Applied | The alerts endpoint returns success.                                                                                                                                                             |
+| Automated security fixes                                 | Applied | Enabled and not paused.                                                                                                                                                                          |
+| Dependabot security updates                              | Applied | Repository security analysis reports enabled.                                                                                                                                                    |
+| Private vulnerability reporting                          | Applied | Enabled for private security advisories.                                                                                                                                                         |
+| Secret scanning and push protection                      | Applied | Both controls report enabled.                                                                                                                                                                    |
+| Selected GitHub-owned Actions                            | Applied | GitHub-owned actions are allowed; verified marketplace actions and custom patterns are not.                                                                                                      |
+| Full commit SHA enforcement                              | Applied | Actions policy requires full commit pins.                                                                                                                                                        |
+| Delete head branches after merge                         | Applied | `delete_branch_on_merge` is enabled.                                                                                                                                                             |
+| Immutable releases                                       | Blocked | Disabled. The workflow is now create-once, but activation must wait until the reviewed workflow is merged and the remaining release controls pass.                                               |
+| `main` ruleset                                           | Blocked | No repository ruleset exists; required check names must be observed on a real pull request first.                                                                                                |
+| Release tag ruleset                                      | Blocked | No `v*.*` tag ruleset exists; tag creation authority and emergency bypass roles are not ready.                                                                                                   |
+| Signed commits                                           | Blocked | Cryptographic signature enforcement belongs in the pending `main` ruleset.                                                                                                                       |
+| Release self-review prohibition                          | Blocked | The sole environment reviewer cannot approve their own deployment after this is enabled; add a second trusted reviewer first.                                                                    |
+| Build/package/release action runtime migration           | Applied | `package.yml` and `release.yml` use reviewed Node 24 action releases pinned to full commits; `build.yml` invokes the reviewed reusable package workflow.                                         |
+| Scheduled security drift workflow and README integration | Applied | `.github/workflows/security-drift.yml` performs weekly upstream, fork, dependency-signature, npm vulnerability, image-tag, and native image vulnerability checks; the README exposes its status. |
 
 The `release` environment currently has one reviewer, allows self-review, and
 uses a custom deployment branch policy. The existing release tag pattern is
@@ -32,9 +31,9 @@ uses a custom deployment branch policy. The existing release tag pattern is
 protection endpoints currently return HTTP 404, so legacy protection does not
 backfill the absent rulesets.
 
-This security-operations slice does not complete production security
-automation. The scheduled security-drift workflow and README integration
-remain open under the vulnerability gate.
+The scheduled workflow intentionally fails when either the downstream mirror
+or packaged snapshot differs from upstream `main`. It reports drift for human
+review and never updates a pin, branch, waiver, or release automatically.
 
 ## Actions Policy
 
@@ -113,12 +112,12 @@ They do not retrofit existing releases. Before activation:
 6. Exercise every failure and rerun transition below on a disposable candidate
    tag.
 
-| State                                               | Rerun rule                                                                                                      |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Before reservation, with no release or asset        | A same tag rerun is allowed only after preflight revalidates the unchanged protected tag and reviewed commit.  |
-| After reservation, before or after key provisioning | The release identity is consumed. Preserve the draft and use a new version and tag.                            |
-| After signed bytes exist                            | Destroy unpublished working copies, preserve sanitized evidence, and use a new version and tag.                |
-| Draft, published release, or any asset exists        | Refuse the run and use a new version and tag; never edit, append, replace, or delete to recycle the identity.  |
+| State                                               | Rerun rule                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Before reservation, with no release or asset        | A same tag rerun is allowed only after preflight revalidates the unchanged protected tag and reviewed commit. |
+| After reservation, before or after key provisioning | The release identity is consumed. Preserve the draft and use a new version and tag.                           |
+| After signed bytes exist                            | Destroy unpublished working copies, preserve sanitized evidence, and use a new version and tag.               |
+| Draft, published release, or any asset exists       | Refuse the run and use a new version and tag; never edit, append, replace, or delete to recycle the identity. |
 
 After those checks, enable immutable releases through the repository API and
 read the setting back. Previously published artifacts remain outside that

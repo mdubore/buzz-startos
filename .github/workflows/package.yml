@@ -153,6 +153,64 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  runtime-sbom:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Install Syft 1.49.0
+        run: |
+          SYFT_TMP="$(mktemp -d)"
+          trap 'rm -rf "$SYFT_TMP"' EXIT
+          curl -fL \
+            'https://github.com/anchore/syft/releases/download/v1.49.0/syft_1.49.0_linux_amd64.tar.gz' \
+            -o "$SYFT_TMP/syft.tar.gz"
+          printf '%s  %s\n' \
+            '7aa2f03ee92739cf643279ba3990548b9925d4e22cae13f46831ee62821147fe' \
+            "$SYFT_TMP/syft.tar.gz" | sha256sum --check
+          tar -xzf "$SYFT_TMP/syft.tar.gz" -C "$SYFT_TMP" syft
+          install -Dm755 "$SYFT_TMP/syft" "$HOME/.local/bin/syft"
+          test "$("$HOME/.local/bin/syft" version -o json | jq -r '.version')" = '1.49.0'
+          printf '%s\n' "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: Install CycloneDX CLI 0.32.0
+        run: |
+          CYCLONEDX_TMP="$(mktemp)"
+          trap 'rm -f "$CYCLONEDX_TMP"' EXIT
+          curl -fL \
+            'https://github.com/CycloneDX/cyclonedx-cli/releases/download/v0.32.0/cyclonedx-linux-x64' \
+            -o "$CYCLONEDX_TMP"
+          printf '%s  %s\n' \
+            '454879e6a4a405c8a13bff49b8982adcb0596f3019b26b0811c66e4d7f0783e1' \
+            "$CYCLONEDX_TMP" | sha256sum --check
+          install -Dm755 "$CYCLONEDX_TMP" "$HOME/.local/bin/cyclonedx"
+          test "$("$HOME/.local/bin/cyclonedx" --version)" = \
+            '0.32.0+0ed788d25c13cef9e9a3029603f6b708e3279390'
+          printf '%s\n' "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: Generate canonical release SBOMs
+        run: ./scripts/generate-sboms.sh runtime-sboms
+
+      - name: Retain runtime SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-sboms
+          path: runtime-sboms
+          if-no-files-found: error
+          retention-days: 30
+
   ephemeral-build:
     if: ${{ inputs.signed_release == false }}
     needs: verify

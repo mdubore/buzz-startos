@@ -432,6 +432,23 @@ Confirm each manifest contains only its intended architecture, the expected
 upstream Git hash and package metadata, the required StartOS release line, and
 the same committed signing identity.
 
+For a tagged candidate, the release workflow downloads the two signed S9PK
+artifacts plus the independently produced vulnerability and SBOM artifacts.
+`scripts/prepare-release-assets.sh` accepts only the exact expected filenames,
+reconstructs the package verification record from the S9PK bytes, validates all
+SBOM subjects and vulnerability evidence, and writes a closed
+`RELEASE-ASSETS.json` and `SHA256SUMS`. A separate job grants only the
+attestation permissions needed by `actions/attest`; a read-only verifier
+redownloads the same `release-assets` workflow artifact, reruns
+`scripts/verify-release-assets.sh`, and verifies every GitHub provenance
+attestation. Only after that succeeds does a minimal write-enabled finalizer
+redownload the immutable workflow artifact and perform the only release upload.
+
+The draft release reservation consumes the tag even if signing, assembly,
+attestation, or publication later fails. Preserve the failed draft and
+sanitized evidence, increment the package revision, and use a new tag. Never
+replace assets or recycle the reserved identity.
+
 ## 9. Test On Devices
 
 Exercise every row in

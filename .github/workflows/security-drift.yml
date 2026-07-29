@@ -1,0 +1,137 @@
+name: Security Drift
+
+on:
+  schedule:
+    - cron: '43 10 * * 3'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    name: Upstream source drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare fork and package pins with upstream main
+        run: |
+          PINNED="$(
+            sed -nE \
+              "s/^[[:space:]]*commit:[[:space:]]*'([0-9a-f]{40})',?$/\1/p" \
+              startos/image-pins.ts
+          )"
+          UPSTREAM="$(
+            git ls-remote \
+              https://github.com/block/buzz.git \
+              refs/heads/main |
+              awk 'NR == 1 { print $1 }'
+          )"
+          FORK="$(
+            git ls-remote \
+              https://github.com/mdubore/buzz9.git \
+              refs/heads/main |
+              awk 'NR == 1 { print $1 }'
+          )"
+          [[ "$PINNED" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$UPSTREAM" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FORK" =~ ^[0-9a-f]{40}$ ]]
+          failures=0
+          if [[ "$FORK" != "$UPSTREAM" ]]; then
+            printf 'buzz9 main is not synchronized with block/buzz main\n' >&2
+            failures=$((failures + 1))
+          fi
+          if [[ "$PINNED" != "$UPSTREAM" ]]; then
+            printf 'the packaged Buzz snapshot requires an upstream review\n' >&2
+            failures=$((failures + 1))
+          fi
+          exit "$failures"
+
+  dependency-image-risk:
+    name: Dependency and runtime image risk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Verify npm registry signatures
+        if: ${{ always() }}
+        run: npm run audit:signatures
+
+      - name: Enforce npm vulnerability policy
+        if: ${{ always() }}
+        run: npm run audit:vulnerabilities
+
+      - name: Install Docker Buildx 0.35.0
+        if: ${{ always() }}
+        run: |
+          BUILDX_TMP="$(mktemp)"
+          trap 'rm -f "$BUILDX_TMP"' EXIT
+          curl -fL \
+            'https://github.com/docker/buildx/releases/download/v0.35.0/buildx-v0.35.0.linux-amd64' \
+            -o "$BUILDX_TMP"
+          printf '%s  %s\n' \
+            'd41ece72044243b4f58b343441ae37446d9c29a7d6b5e11c61847bbcf8f7dfda' \
+            "$BUILDX_TMP" | sha256sum --check
+          install -Dm755 \
+            "$BUILDX_TMP" \
+            "$HOME/.docker/cli-plugins/docker-buildx"
+          test "$(
+            docker buildx version |
+              awk '{ print $2 }'
+          )" = 'v0.35.0'
+
+      - name: Verify immutable image inputs and tag drift
+        if: ${{ always() }}
+        run: npm run verify:images
+
+      - name: Install Grype 0.116.0
+        if: ${{ always() }}
+        run: |
+          GRYPE_TMP="$(mktemp -d)"
+          GRYPE_ARCHIVE="$GRYPE_TMP/grype.tar.gz"
+          trap 'rm -rf "$GRYPE_TMP"' EXIT
+          curl -fL \
+            'https://github.com/anchore/grype/releases/download/v0.116.0/grype_0.116.0_linux_amd64.tar.gz' \
+            -o "$GRYPE_ARCHIVE"
+          printf '%s  %s\n' \
+            '40aff724297312f91ea390d003bed8d8651c74cc7f5b26732db80b3a408d2fc5' \
+            "$GRYPE_ARCHIVE" | sha256sum --check
+          tar -xzf "$GRYPE_ARCHIVE" -C "$GRYPE_TMP" grype
+          install -Dm755 "$GRYPE_TMP/grype" "$HOME/.local/bin/grype"
+          test "$(
+            "$HOME/.local/bin/grype" version |
+              awk '$1 == "Version:" { print $2; exit }'
+          )" = '0.116.0'
+          printf '%s\n' "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - name: Scan immutable runtime images
+        if: ${{ always() }}
+        run: npm run scan:images -- scheduled-vulnerability-reports
+
+      - name: Retain scheduled vulnerability reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scheduled-vulnerability-reports
+          path: scheduled-vulnerability-reports
+          if-no-files-found: error
+          retention-days: 30
