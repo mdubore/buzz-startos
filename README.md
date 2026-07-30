@@ -323,6 +323,14 @@ signal, not permission to update or publish automatically. See
 [`docs/upstream/dd222a5-runtime-contract.md`](docs/upstream/dd222a5-runtime-contract.md)
 for the frozen runtime evidence.
 
+At the 2026-07-30 review checkpoint, `mdubore/buzz9` was fast-forwarded to
+`block/buzz` commit
+[`63496cc1d4c6f1b7c613801bdcc694169dcf391a`](https://github.com/block/buzz/commit/63496cc1d4c6f1b7c613801bdcc694169dcf391a).
+That mirror update does not change this package. The matching amd64 and arm64
+Buzz image manifests each produced 35 critical and 58 high findings, so the
+immutable package pins remain at `dd222a5`. See the
+[`63496cc` scan record](docs/security/63496cc-runtime-scan.md).
+
 The package version and localized release notes live only in
 [`startos/versions/current.ts`](startos/versions/current.ts).
 
@@ -394,10 +402,14 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
 - All 46 StartOS device-matrix cells remain **NOT RUN**. Install, client,
   authorization, media, Git, persistence, failure, backup/restore, upgrade,
   lifecycle, and resource behavior remain unproven on both architectures.
-- At final verification on 2026-07-27, upstream `main` was 22 commits beyond
-  `dd222a5` and included an authorization security fix. A new runtime-contract
-  review, image-pin refresh, package revision, and device validation are
-  required before stable use.
+- At the 2026-07-30 checkpoint, the source mirror matched upstream commit
+  `63496cc`, which includes the authorization fix missing from the packaged
+  snapshot. Its native images still fail the no-critical-vulnerability policy,
+  so no runtime-contract freeze, image-pin refresh, or package revision was
+  made.
+- Production promotion is also blocked by 46 unexecuted device-matrix cells,
+  missing authenticated independent review, disabled immutable releases, and
+  missing active `main` and release-tag rulesets.
 - This package has not been published to a registry.
 
 See [`DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md) for current
@@ -415,7 +427,9 @@ minimum_startos: '0.4.0-beta.10'
 release_status: 'prerelease; sideload only; not production-ready'
 device_validation: '46 matrix cells NOT RUN'
 upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
+mirror_checkpoint: 63496cc1d4c6f1b7c613801bdcc694169dcf391a
 security_status: ':2 predates unauthorized role-change fix 00ecf2c'
+candidate_image_policy: 'blocked: 35 critical findings on each Buzz platform'
 full_client:
   required: true
   desktop: external Buzz desktop application
