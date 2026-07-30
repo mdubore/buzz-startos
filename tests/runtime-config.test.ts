@@ -80,6 +80,9 @@ const EXPECTED_CONFIG = {
     BUZZ_S3_SECRET_KEY: COMPLETE_STORE.s3SecretKey,
     BUZZ_S3_BUCKET: 'buzz-media',
     BUZZ_S3_REGION: 'us-east-1',
+    BUZZ_S3_ADDRESSING_STYLE: 'path',
+    BUZZ_DB_POOL_SIZE: '50',
+    BUZZ_REPLICA_READ_MAX_AGE_MS: '0',
     BUZZ_GIT_REPO_PATH: '/data/git',
     BUZZ_AUTO_MIGRATE: 'false',
     BUZZ_GIT_CONFORMANCE_PROBE: 'true',
@@ -154,6 +157,9 @@ test('omits stale and intentionally disabled environment variables', () => {
     'BUZZ_MEDIA_SERVER_DOMAIN',
     'BUZZ_ADMIN_HOST',
     'TYPESENSE_API_KEY',
+    'READ_DATABASE_URL',
+    'BUZZ_DB_READ_POOL_SIZE',
+    'BUZZ_REPLICA_HEAD_MAX_AGE_SECS',
   ]) {
     assert.equal(Object.hasOwn(buzzEnv, name), false)
   }
