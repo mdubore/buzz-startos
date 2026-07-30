@@ -7,3 +7,4 @@ node_modules/
 docker-images/
 javascript/
 ncc-cache.git/
+artifacts/test-sideload/
