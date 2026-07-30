@@ -7,11 +7,12 @@
 [![Security Drift](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml/badge.svg?branch=main)](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml)
 
 > [!WARNING]
-> The current `:2` prerelease packages the frozen Buzz snapshot `dd222a5` and
+> The published `:2` prerelease packages the frozen Buzz snapshot `dd222a5` and
 > predates upstream fix [`00ecf2c`](https://github.com/block/buzz/commit/00ecf2cac7544d986b4eb111ad0a8b1d7560791f)
 > for unauthorized channel-role changes, including owner demotion. The
-> published `:2` artifacts are unsuitable for production. A new package
-> revision must sync the fix and pass the StartOS device matrix.
+> published `:2` artifacts are unsuitable for production. This branch prepares
+> an unpublished x86_64 test package of `63496cc`, which contains that fix but
+> still has known critical vulnerabilities and no StartOS device validation.
 
 This repository packages the Buzz relay and its data services for the official
 stable StartOS `0.4.0` release. Production acceptance targets an exact stable
@@ -296,8 +297,8 @@ Application source and StartOS packaging stay in separate repositories:
 - `mdubore/buzz-startos` contains the StartOS integration and no Buzz
   application patches.
 
-The packaged Buzz source is frozen at commit
-[`dd222a509b156ba52ed3219e895d7bf1cf322c92`](https://github.com/block/buzz/commit/dd222a509b156ba52ed3219e895d7bf1cf322c92).
+The local test package is frozen at commit
+[`63496cc1d4c6f1b7c613801bdcc694169dcf391a`](https://github.com/block/buzz/commit/63496cc1d4c6f1b7c613801bdcc694169dcf391a).
 Manifest image inputs combine the upstream SHA reference with an immutable OCI
 index digest, and record native amd64 and arm64 platform digests. The live
 image verifier rejects tag drift, missing platforms, revision mismatches, and
@@ -320,15 +321,15 @@ policy, checks mutable image tags against immutable pins, and performs a fresh
 scan of all ten native runtime image manifests. A drift failure is a review
 signal, not permission to update or publish automatically. See
 [`UPDATING.md`](UPDATING.md) for the reviewed upstream-update procedure and
-[`docs/upstream/dd222a5-runtime-contract.md`](docs/upstream/dd222a5-runtime-contract.md)
+[`docs/upstream/63496cc-runtime-contract.md`](docs/upstream/63496cc-runtime-contract.md)
 for the frozen runtime evidence.
 
 At the 2026-07-30 review checkpoint, `mdubore/buzz9` was fast-forwarded to
 `block/buzz` commit
 [`63496cc1d4c6f1b7c613801bdcc694169dcf391a`](https://github.com/block/buzz/commit/63496cc1d4c6f1b7c613801bdcc694169dcf391a).
-That mirror update does not change this package. The matching amd64 and arm64
-Buzz image manifests each produced 35 critical and 58 high findings, so the
-immutable package pins remain at `dd222a5`. See the
+The local `:0` test package uses that immutable image. The matching amd64 and
+arm64 Buzz manifests each produced 35 critical and 58 high findings, so the
+package remains ineligible for production. See the
 [`63496cc` scan record](docs/security/63496cc-runtime-scan.md).
 
 The package version and localized release notes live only in
@@ -404,9 +405,9 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
   lifecycle, and resource behavior remain unproven on both architectures.
 - At the 2026-07-30 checkpoint, the source mirror matched upstream commit
   `63496cc`, which includes the authorization fix missing from the packaged
-  snapshot. Its native images still fail the no-critical-vulnerability policy,
-  so no runtime-contract freeze, image-pin refresh, or package revision was
-  made.
+  `:2` snapshot. The current branch pins that image as an unpublished local
+  x86_64 test package. Its native images still fail the
+  no-critical-vulnerability policy.
 - Production promotion is also blocked by 46 unexecuted device-matrix cells,
   missing authenticated independent review, disabled immutable releases, and
   missing active `main` and release-tag rulesets.
@@ -424,11 +425,11 @@ package_id: buzz
 purpose: private Buzz relay and backend for a Nostr-signed human/agent workspace
 startos_target: official stable v0.4.0
 minimum_startos: '0.4.0-beta.10'
-release_status: 'prerelease; sideload only; not production-ready'
+release_status: 'unpublished local test sideload; not production-ready'
 device_validation: '46 matrix cells NOT RUN'
-upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
+upstream_snapshot: 63496cc1d4c6f1b7c613801bdcc694169dcf391a
 mirror_checkpoint: 63496cc1d4c6f1b7c613801bdcc694169dcf391a
-security_status: ':2 predates unauthorized role-change fix 00ecf2c'
+security_status: '63496cc includes role-change fix 00ecf2c; runtime CVEs remain'
 candidate_image_policy: 'blocked: 35 critical findings on each Buzz platform'
 full_client:
   required: true
@@ -484,7 +485,7 @@ dependencies: none
 provenance:
   image_pins: startos/image-pins.ts
   package_version: startos/versions/current.ts
-  runtime_contract: docs/upstream/dd222a5-runtime-contract.md
+  runtime_contract: docs/upstream/63496cc-runtime-contract.md
   signing_key: assets/signing-pubkey.pem
   signing_fingerprint: assets/signing-pubkey.sha256
   upstream_runbook: UPDATING.md
