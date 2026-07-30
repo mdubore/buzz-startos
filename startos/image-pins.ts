@@ -11,22 +11,22 @@ export const packedImageReference = (pin: ImagePin) =>
   `${pin.tagReference}@${pin.indexDigest}`
 
 export const UPSTREAM = {
-  commit: 'dd222a509b156ba52ed3219e895d7bf1cf322c92',
-  shortCommit: 'dd222a5',
-  committedAt: '2026-07-26T07:57:31Z',
+  commit: '63496cc1d4c6f1b7c613801bdcc694169dcf391a',
+  shortCommit: '63496cc',
+  committedAt: '2026-07-30T00:35:15Z',
   relayVersion: '0.2.0',
 } as const
 
 export const IMAGE_PINS = {
   buzz: {
-    tagReference: 'ghcr.io/block/buzz:sha-dd222a5',
+    tagReference: 'ghcr.io/block/buzz:sha-63496cc',
     indexDigest:
-      'sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9',
+      'sha256:9de8aff13af33f3b17659e6eacda024b3070efda911c5e08d4d85a6c01c4deb6',
     platforms: {
       amd64:
-        'sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152',
+        'sha256:5ac4697562230d32de4473d2eaf2eab098300c8aae1721e6bd4bf00b2956a5bf',
       arm64:
-        'sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7',
+        'sha256:414d8e183f3ccd45eb228cfdb1d6d88da463dd7440bc726c500abd435d0e7c3c',
     },
   },
   postgres: {
