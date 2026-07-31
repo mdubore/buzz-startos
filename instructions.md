@@ -28,6 +28,23 @@ Buzz community and is used in authentication, media, and Git links.
 Enter only the public `npub` or hex key in StartOS. Never enter an `nsec` or
 other private key into a StartOS action.
 
+> [!IMPORTANT]
+> A Buzz client using a StartOS interface address marked **Root CA** must trust
+> this server's Root CA in the operating-system certificate store. The desktop
+> client and its bundled `buzz-acp` sidecar make independent WSS connections,
+> so the current downstream remediation loads native certificate roots in both
+> paths. Fixing only the desktop connection leaves ACP agent sessions unable to
+> connect. Keep certificate and hostname validation enabled.
+
+If you prefer a publicly trusted certificate, add and enable a public domain
+with an ACME certificate such as Let's Encrypt on the Buzz interface before
+running **Complete Initial Setup**, then select that HTTPS address as the
+canonical URL. This makes the interface publicly reachable and requires the
+corresponding gateway, DNS, and port-forwarding configuration. The package
+cannot change the canonical host after setup. If you also configure that real
+domain privately with StartOS split DNS, LAN clients can use the same hostname
+and public certificate without routing out to the public gateway.
+
 The StartOS browser interface exposes only limited invite and repository
 routes. Use the external client for channels, direct messages, media,
 canvases, workflows, search, agents, and the rest of the workspace. Upstream

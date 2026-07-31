@@ -165,6 +165,112 @@ It never returns relay, database, Redis, MinIO, or HMAC secrets. Mobile client
 support remains upstream work in progress and is not part of the current
 device-test claim.
 
+## Building A Client For StartOS WSS
+
+### Current package behavior
+
+Buzz listens for plain HTTP and WebSocket traffic on internal port `3000`.
+StartOS terminates external TLS and proxies that traffic to the container. If
+the canonical URL selected during **Complete Initial Setup** uses `https://`,
+the package derives the same authority with a `wss://` scheme for Buzz clients.
+That canonical host is immutable and tenant-bearing requests for another host
+fail closed.
+
+For `.local`, IP, and private-only domain addresses whose StartOS interface
+entry uses **Root CA**, StartOS presents a certificate signed by the server's
+private Root CA. Installing that Root CA only in a browser is not sufficient
+for a native Buzz process: it must be trusted by the operating system, and the
+WebSocket TLS implementation must load the operating-system trust store.
+
+The upstream client source on which the current downstream desktop build is
+based initially enabled `rustls-tls-webpki-roots`. That feature loads a
+compiled set of public roots, so it cannot see a StartOS Root CA installed in
+the operating system. The result is a WSS certificate failure even though the
+StartOS address works in a properly configured browser.
+
+### Current downstream remediation
+
+Buzz Desktop and `buzz-acp` open separate relay connections. Both dependency
+sites must use native roots:
+
+```toml
+# desktop/src-tauri/Cargo.toml — desktop relay connection
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+
+# workspace Cargo.toml — buzz-acp relay connection
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+```
+
+Remove `rustls-tls-webpki-roots` from those dependency configurations, rebuild
+both `buzz-desktop` and `buzz-acp`, and include the rebuilt ACP sidecar in the
+desktop package. Fixing only the desktop dependency lets the main client
+connect but leaves ACP agent sessions unable to establish their own WSS
+connection.
+
+This remediation keeps certificate-chain and hostname validation enabled. Do
+not replace it with an invalid-certificate bypass, and do not treat plain
+`ws://` as an equivalent production configuration. The StartOS Root CA must
+still be installed in the client machine's operating-system trust store.
+
+The current downstream patch adds an opt-in live test to each WebSocket path.
+From the `buzz-startos` repository root, exercise both against the exact
+**Relay WebSocket URL** reported by **Connection Information**:
+
+```bash
+cd ../buzz9
+. ./bin/activate-hermit
+
+(
+  cd desktop/src-tauri
+  BUZZ_TEST_WSS_URL='wss://your-canonical-startos-address' \
+    cargo test \
+    native_websocket::tests::external_wss_relay_uses_native_trust_store \
+    -- --ignored --exact --nocapture
+)
+
+BUZZ_TEST_WSS_URL='wss://your-canonical-startos-address' \
+  cargo test -p buzz-acp \
+  relay::tests::external_wss_relay_uses_native_trust_store \
+  -- --ignored --exact --nocapture
+```
+
+Each command must report exactly one executed and passing test. These test
+names were added with the downstream native-root remediation and are not part
+of its upstream base; if they are absent from another checkout, port equivalent
+tests before treating the Cargo feature change as verified. A zero-test result
+is not evidence of a successful handshake.
+
+The opt-in tests verify TLS only. A complete client acceptance test must also
+authenticate, exchange events, start an ACP-backed agent, and repeat the checks
+after restarting the packaged client.
+
+### StartOS-side alternative and long-term options
+
+Native-root loading is this downstream's current remediation for private
+StartOS addresses; it is not the only possible long-term deployment design.
+StartOS can instead serve a public domain using a publicly trusted ACME
+certificate such as Let's Encrypt. A WebPKI-only client can validate that
+certificate without installing the StartOS Root CA.
+
+With this package, configure and enable the public domain on the Buzz interface
+**before** completing initial setup, then select its HTTPS URL as the immutable
+canonical URL. The package cannot switch an existing community to that host or
+treat it as an alias later. It also does not provision the domain, gateway,
+DNS, public exposure, port forwarding, or ACME certificate; those are operator
+choices in StartOS.
+
+Public certificates are not available for `.local` or bare IP addresses, and a
+private-only domain normally uses the StartOS Root CA. A real domain can,
+however, be configured as both a public ACME-backed domain and a private domain
+using StartOS split DNS. That arrangement keeps LAN traffic local while using
+the same publicly trusted certificate and canonical hostname on both routes.
+
+Root-CA-backed addresses continue to require a client that reads the relevant
+trust store. A future client could alternatively support an explicit per-relay
+CA import, but the current downstream patch uses the operating-system store so
+normal public roots and an installed StartOS Root CA follow the same validated
+code path.
+
 ## Private Relay Management
 
 The relay requires membership. These user-only actions are available while it

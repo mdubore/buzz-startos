@@ -23,12 +23,12 @@ Changing or aliasing the canonical host after setup is not supported.
 
 ### Local and private addresses
 
-StartOS signs certificates for `.local`, private-domain, and IP addresses with
-the server's private Root CA. The client machine must trust that Root CA in its
-operating-system certificate store. A Buzz binary built with
-`tokio-tungstenite`'s `rustls-tls-webpki-roots` feature still fails because it
-loads only the compiled public WebPKI roots and does not read the operating
-system store.
+StartOS signs certificates for `.local`, IP, and private-only domain addresses
+whose interface entry uses **Root CA** with the server's private Root CA. The
+client machine must trust that Root CA in its operating-system certificate
+store. A Buzz binary built with `tokio-tungstenite`'s
+`rustls-tls-webpki-roots` feature still fails because it loads only the
+compiled public WebPKI roots and does not read the operating system store.
 
 The current client-side remediation is to use
 `rustls-tls-native-roots` instead of `rustls-tls-webpki-roots` in both:
@@ -54,6 +54,12 @@ public domain on the Buzz interface before completing initial setup, then
 select its HTTPS URL as the immutable canonical address. It also carries the
 network exposure, DNS, gateway, and port-forwarding considerations of a public
 domain.
+
+StartOS split DNS can additionally configure the same real domain as a private
+LAN domain. LAN clients then keep direct routing while using the same canonical
+hostname and publicly trusted certificate as the public route. This is
+different from a private-only domain whose interface entry uses the StartOS
+Root CA.
 
 ## Non-Solutions
 
