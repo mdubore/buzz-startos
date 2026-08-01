@@ -17,6 +17,7 @@ export const rawStoredStateShape = z.object({
   gitHookHmacSecretHex: z.unknown().optional().catch(undefined),
   ownerPubkeyHex: z.unknown().optional().catch(undefined),
   primaryUrl: z.unknown().optional().catch(undefined),
+  pairingRelayUrl: z.unknown().optional().catch(undefined),
   lastMembershipMutationUnixSecond: z.unknown().optional().catch(undefined),
 })
 

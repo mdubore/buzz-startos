@@ -44,6 +44,11 @@ const dict = {
   'Relay Members': 40,
   'Buzz Pairing Relay': 41,
   'Ephemeral WebSocket endpoint for pairing Buzz devices.': 42,
+  'Pairing Relay WebSocket URL': 43,
+  'Select the StartOS WebSocket address Buzz will advertise for device pairing.': 44,
+  'Configure Pairing Relay': 45,
+  'Select the current StartOS WebSocket address used to pair Buzz devices.': 46,
+  'Pairing Relay Configured': 47,
 } as const
 
 /**

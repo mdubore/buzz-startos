@@ -8,6 +8,7 @@ import {
   PAIRING_PORT,
   WEB_INTERFACE_ID,
 } from './constants.js'
+import { normalizePairingRelayUrl } from './domain/pairing-url.js'
 import { derivePublicConfig } from './domain/public-url.js'
 import { sdk } from './sdk.js'
 
@@ -43,24 +44,11 @@ function normalizeRootOrigin(value: unknown): string | null {
 
 function normalizeWebSocketOrigin(value: unknown): string | null {
   if (typeof value !== 'string') return null
-
-  let parsed: URL
   try {
-    parsed = new URL(value)
+    return normalizePairingRelayUrl(value)
   } catch {
     return null
   }
-
-  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') return null
-  if (parsed.username !== '' || parsed.password !== '') return null
-  if (parsed.search !== '' || parsed.hash !== '') return null
-  if (parsed.pathname !== '' && parsed.pathname !== '/') return null
-
-  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
-  if (hostname === '' || hostname.endsWith('.')) return null
-
-  const authority = parsed.port ? `${hostname}:${parsed.port}` : hostname
-  return `${parsed.protocol}//${authority}`
 }
 
 function selectInterfaceUrls(
