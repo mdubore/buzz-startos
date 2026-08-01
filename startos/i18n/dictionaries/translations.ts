@@ -43,6 +43,8 @@ export default {
     38: 'Miembro eliminado',
     39: 'Clave pública Nostr normalizada',
     40: 'Miembros del relay',
+    41: 'Relay de emparejamiento de Buzz',
+    42: 'Endpoint WebSocket efímero para emparejar dispositivos Buzz.',
   },
   de_DE: {
     0: 'Buzz-Weboberfläche',
@@ -86,6 +88,8 @@ export default {
     38: 'Mitglied entfernt',
     39: 'Normalisierter öffentlicher Nostr-Schlüssel',
     40: 'Relay-Mitglieder',
+    41: 'Buzz-Kopplungs-Relay',
+    42: 'Temporärer WebSocket-Endpunkt zum Koppeln von Buzz-Geräten.',
   },
   pl_PL: {
     0: 'Interfejs webowy Buzz',
@@ -129,6 +133,8 @@ export default {
     38: 'Usunięto członka',
     39: 'Znormalizowany klucz publiczny Nostr',
     40: 'Członkowie przekaźnika',
+    41: 'Przekaźnik parowania Buzz',
+    42: 'Tymczasowy endpoint WebSocket do parowania urządzeń Buzz.',
   },
   fr_FR: {
     0: 'Interface web de Buzz',
@@ -172,5 +178,7 @@ export default {
     38: 'Membre supprimé',
     39: 'Clé publique Nostr normalisée',
     40: 'Membres du relais',
+    41: 'Relais d’appairage Buzz',
+    42: 'Point de terminaison WebSocket éphémère pour appairer des appareils Buzz.',
   },
 } satisfies Record<'es_ES' | 'de_DE' | 'pl_PL' | 'fr_FR', LangDict>

@@ -1,6 +1,9 @@
 import {
   BUZZ_PORT,
   HOST_ID,
+  PAIRING_HOST_ID,
+  PAIRING_INTERFACE_ID,
+  PAIRING_PORT,
   RELAY_INTERFACE_ID,
   WEB_INTERFACE_ID,
 } from './constants'
@@ -12,6 +15,11 @@ export const setInterfaces = sdk.setupInterfaces(async ({ effects }) => {
   const origin = await host.bindPort(BUZZ_PORT, {
     protocol: 'http',
     preferredExternalPort: BUZZ_PORT,
+  })
+  const pairingHost = sdk.MultiHost.of(effects, PAIRING_HOST_ID)
+  const pairingOrigin = await pairingHost.bindPort(PAIRING_PORT, {
+    protocol: 'http',
+    preferredExternalPort: PAIRING_PORT,
   })
 
   const web = sdk.createInterface(effects, {
@@ -38,5 +46,20 @@ export const setInterfaces = sdk.setupInterfaces(async ({ effects }) => {
     query: {},
   })
 
-  return [await origin.export([web, relay])]
+  const pairingRelay = sdk.createInterface(effects, {
+    name: i18n('Buzz Pairing Relay'),
+    id: PAIRING_INTERFACE_ID,
+    description: i18n('Ephemeral WebSocket endpoint for pairing Buzz devices.'),
+    type: 'api',
+    masked: false,
+    schemeOverride: { ssl: 'wss', noSsl: 'ws' },
+    username: null,
+    path: '',
+    query: {},
+  })
+
+  return [
+    await origin.export([web, relay]),
+    await pairingOrigin.export([pairingRelay]),
+  ]
 })

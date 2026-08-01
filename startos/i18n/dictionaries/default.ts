@@ -42,6 +42,8 @@ const dict = {
   'Member Removed': 38,
   'Normalized Nostr Public Key': 39,
   'Relay Members': 40,
+  'Buzz Pairing Relay': 41,
+  'Ephemeral WebSocket endpoint for pairing Buzz devices.': 42,
 } as const
 
 /**
