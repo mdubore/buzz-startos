@@ -108,6 +108,7 @@ Review the complete range before touching package pins:
   git diff "$old_sha..$new_sha" -- \
     Dockerfile \
     crates/buzz-relay \
+    crates/buzz-pair-relay \
     crates/buzz-admin \
     crates/buzz-db \
     crates/buzz-media \
@@ -122,8 +123,8 @@ Review the complete range before touching package pins:
 Audit at least:
 
 - image user, entrypoint, installed binaries, health tools, and exposed ports;
-- relay and `buzz-admin` commands, arguments, required environment, and exit
-  behavior;
+- relay, `buzz-pair-relay`, and `buzz-admin` commands, arguments, required
+  environment, binding behavior, and exit behavior;
 - migrations, automatic-migration behavior, and PostgreSQL compatibility;
 - Compose sidecars, versions, volumes, ownership, ports, and startup order;
 - every new, removed, renamed, or default-changed environment variable;
@@ -254,8 +255,9 @@ Inspect both native image configs without executing either architecture:
 )
 ```
 
-Also inspect the filesystem on each platform for `curl`, `buzz-relay`, and
-`buzz-admin`, and rerun the four packaged CLI help commands:
+Also inspect the filesystem on each platform for `curl`, `buzz-relay`,
+`buzz-pair-relay`, and `buzz-admin`, and rerun the four packaged CLI help
+commands:
 
 ```text
 buzz-admin migrate --help

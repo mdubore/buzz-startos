@@ -5,11 +5,13 @@
 # Buzz for StartOS
 
 > [!WARNING]
-> The current `:2` prerelease packages the frozen Buzz snapshot `dd222a5` and
+> The current source branch still packages the frozen Buzz snapshot `dd222a5` and
 > predates upstream fix [`00ecf2c`](https://github.com/block/buzz/commit/00ecf2cac7544d986b4eb111ad0a8b1d7560791f)
 > for unauthorized channel-role changes, including owner demotion. The
-> published `:2` artifacts are unsuitable for production. A new package
-> revision must sync the fix and pass the StartOS device matrix.
+> published `:2` artifacts and any local `:3` pairing-beta builds from this
+> branch are unsuitable for production. Do not create a release tag or publish
+> new artifacts until the package syncs that fix and passes the StartOS device
+> matrix.
 
 This repository packages the Buzz relay and its data services for the StartOS
 v0.4.0 release line. The SDK-generated package manifest currently requires
@@ -536,7 +538,7 @@ minimum_startos: "0.4.0-beta.10"
 release_status: "prerelease; sideload only; not production-ready"
 device_validation: "26 matrix cells NOT RUN"
 upstream_snapshot: dd222a509b156ba52ed3219e895d7bf1cf322c92
-security_status: ":2 predates unauthorized role-change fix 00ecf2c"
+security_status: "pinned snapshot predates unauthorized role-change fix 00ecf2c"
 full_client:
   required: true
   desktop: external Buzz desktop application

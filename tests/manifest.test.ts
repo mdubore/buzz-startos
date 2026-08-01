@@ -11,7 +11,7 @@ import { manifest } from '../startos/manifest/index.js'
 import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
-const VERSION = '0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2'
+const VERSION = '0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:3'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -86,6 +86,13 @@ test('uses the audited upstream-main snapshot as the initial package version', (
   ])
   assert.equal(typeof current.options.migrations.up, 'function')
   assert.equal(current.options.migrations.down, IMPOSSIBLE)
+  assert.equal(typeof current.options.releaseNotes, 'object')
+  if (typeof current.options.releaseNotes === 'string') {
+    throw new Error('release notes must be localized')
+  }
+  assert.match(current.options.releaseNotes.en_US, /dedicated.*pairing relay/i)
+  assert.match(current.options.releaseNotes.en_US, /LAN-only/i)
+  assert.match(current.options.releaseNotes.en_US, /does not enable remote/i)
 })
 
 test('localizes package descriptions without scaffold placeholders', () => {
