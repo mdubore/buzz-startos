@@ -144,6 +144,24 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
     null,
     'minio-client',
   )
+  const pairingSub = sdk.SubContainer.of(
+    effects,
+    { imageId: 'buzz' },
+    null,
+    'pairing',
+  )
+
+  const pairingProbeCommand = [
+    'curl',
+    '-sS',
+    '-o',
+    '/dev/null',
+    '-w',
+    '%{http_code}',
+    'http://127.0.0.1:5000/',
+  ]
+  const pairingRelayIsReady = () =>
+    commandSucceeded(() => pairingSub.exec(pairingProbeCommand), '400')
 
   const mcHost = buildConnectionUrl({
     protocol: 'http',
@@ -274,6 +292,24 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
       },
       requires: ['postgres', 'create-bucket'],
     })
+    .addDaemon('pairing', {
+      subcontainer: pairingSub,
+      exec: {
+        command: ['/usr/local/bin/buzz-pair-relay'],
+        env: { BUZZ_PAIR_RELAY_BIND_ADDR: '0.0.0.0:5000' },
+      },
+      ready: {
+        display: null,
+        fn: async () =>
+          hiddenReadiness(
+            await pairingRelayIsReady(),
+            'Buzz Pairing Relay is ready',
+            'Buzz Pairing Relay is not ready',
+          ),
+        gracePeriod: 60_000,
+      },
+      requires: [],
+    })
     .addDaemon('buzz', {
       subcontainer: buzzSub,
       exec: {
@@ -289,6 +325,18 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
         gracePeriod: 180_000,
       },
       requires: ['postgres', 'redis', 'minio', 'create-bucket', 'migrate'],
+    })
+    .addHealthCheck('pairing-relay', {
+      ready: {
+        display: i18n('Buzz Pairing Relay'),
+        fn: async () =>
+          hiddenReadiness(
+            await pairingRelayIsReady(),
+            i18n('Buzz Pairing Relay is ready'),
+            i18n('Buzz Pairing Relay is not ready'),
+          ),
+      },
+      requires: ['pairing'],
     })
 }
 

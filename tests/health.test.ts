@@ -204,7 +204,10 @@ test('native stack records the exact lazy subcontainers and dependency order', (
         'exec' in entry && 'env' in entry.exec
           ? (entry.exec.env ?? null)
           : null,
-      display: entry.kind === 'daemon' ? entry.ready.display : null,
+      display:
+        entry.kind === 'daemon' || entry.kind === 'health'
+          ? entry.ready.display
+          : null,
       gracePeriod:
         entry.kind === 'daemon' ? (entry.ready.gracePeriod ?? null) : null,
     })),
@@ -290,6 +293,18 @@ test('native stack records the exact lazy subcontainers and dependency order', (
       },
       {
         kind: 'daemon',
+        id: 'pairing',
+        requires: [],
+        imageId: 'buzz',
+        name: 'pairing',
+        mounts: [],
+        command: ['/usr/local/bin/buzz-pair-relay'],
+        env: { BUZZ_PAIR_RELAY_BIND_ADDR: '0.0.0.0:5000' },
+        display: null,
+        gracePeriod: 60_000,
+      },
+      {
+        kind: 'daemon',
         id: 'buzz',
         requires: ['postgres', 'redis', 'minio', 'create-bucket', 'migrate'],
         imageId: 'buzz',
@@ -300,14 +315,112 @@ test('native stack records the exact lazy subcontainers and dependency order', (
         display: 'Buzz Relay',
         gracePeriod: 180_000,
       },
+      {
+        kind: 'health',
+        id: 'pairing-relay',
+        requires: ['pairing'],
+        imageId: null,
+        name: null,
+        mounts: [],
+        command: 'function',
+        env: null,
+        display: 'Buzz Pairing Relay',
+        gracePeriod: null,
+      },
     ],
   )
 
   const migrate = stack.entries[4]
-  const buzz = stack.entries[5]
+  const buzz = stack.entries[6]
   assert.ok('subcontainer' in migrate)
   assert.ok('subcontainer' in buzz)
   assert.equal(migrate.subcontainer?.identity, buzz.subcontainer?.identity)
+})
+
+test('pairing readiness requires the upstream HTTP 400 WebSocket handshake response', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const pairing = stack.entries.find((entry) => entry.id === 'pairing')
+  assert.equal(pairing?.kind, 'daemon')
+  if (pairing?.kind !== 'daemon' || pairing.subcontainer === null) {
+    throw new Error('pairing must be a container daemon')
+  }
+
+  const calls: string[][] = []
+  let response = { exitCode: 0, stdout: '404\n' }
+  Object.defineProperty(pairing.subcontainer, 'exec', {
+    configurable: true,
+    value: async (command: string[]) => {
+      calls.push(command)
+      return response
+    },
+  })
+
+  assert.equal((await pairing.ready.fn()).result, 'failure')
+  response = { exitCode: 0, stdout: '400\n' }
+  assert.equal((await pairing.ready.fn()).result, 'success')
+  response = { exitCode: 1, stdout: '400\n' }
+  assert.equal((await pairing.ready.fn()).result, 'failure')
+
+  assert.deepEqual(calls, [
+    [
+      'curl',
+      '-sS',
+      '-o',
+      '/dev/null',
+      '-w',
+      '%{http_code}',
+      'http://127.0.0.1:5000/',
+    ],
+    [
+      'curl',
+      '-sS',
+      '-o',
+      '/dev/null',
+      '-w',
+      '%{http_code}',
+      'http://127.0.0.1:5000/',
+    ],
+    [
+      'curl',
+      '-sS',
+      '-o',
+      '/dev/null',
+      '-w',
+      '%{http_code}',
+      'http://127.0.0.1:5000/',
+    ],
+  ])
+})
+
+test('ongoing pairing health reports fixed localized success and failure', async () => {
+  const stack = buildNativeStack(null!, RUNTIME_CONFIG)
+  const pairing = stack.entries.find((entry) => entry.id === 'pairing')
+  const health = stack.entries.find((entry) => entry.id === 'pairing-relay')
+  assert.equal(pairing?.kind, 'daemon')
+  assert.equal(health?.kind, 'health')
+  if (
+    pairing?.kind !== 'daemon' ||
+    pairing.subcontainer === null ||
+    health?.kind !== 'health'
+  ) {
+    throw new Error('pairing daemon and health check must exist')
+  }
+
+  let response = { exitCode: 0, stdout: '400\n' }
+  Object.defineProperty(pairing.subcontainer, 'exec', {
+    configurable: true,
+    value: async () => response,
+  })
+
+  assert.deepEqual(await health.ready.fn(), {
+    result: 'success',
+    message: 'Buzz Pairing Relay is ready',
+  })
+  response = { exitCode: 0, stdout: '404\n' }
+  assert.deepEqual(await health.ready.fn(), {
+    result: 'failure',
+    message: 'Buzz Pairing Relay is not ready',
+  })
 })
 
 test('bucket creation uses sequential secret-free argv with scoped encoded env', async () => {

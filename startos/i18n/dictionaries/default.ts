@@ -50,6 +50,8 @@ const dict = {
   'Select the current StartOS WebSocket address used to pair Buzz devices.': 46,
   'Pairing Relay Configured': 47,
   'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.': 48,
+  'Buzz Pairing Relay is ready': 49,
+  'Buzz Pairing Relay is not ready': 50,
 } as const
 
 /**

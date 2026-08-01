@@ -51,6 +51,8 @@ export default {
     46: 'Selecciona la dirección WebSocket actual de StartOS utilizada para emparejar dispositivos Buzz.',
     47: 'Relay de emparejamiento configurado',
     48: 'Selecciona una dirección WebSocket disponible actualmente en la interfaz de emparejamiento de Buzz antes de iniciar Buzz.',
+    49: 'El relay de emparejamiento de Buzz está listo',
+    50: 'El relay de emparejamiento de Buzz no está listo',
   },
   de_DE: {
     0: 'Buzz-Weboberfläche',
@@ -102,6 +104,8 @@ export default {
     46: 'Wählen Sie die aktuelle StartOS-WebSocket-Adresse zum Koppeln von Buzz-Geräten.',
     47: 'Kopplungs-Relay konfiguriert',
     48: 'Wählen Sie vor dem Start von Buzz eine derzeit verfügbare WebSocket-Adresse der Buzz-Kopplungsschnittstelle.',
+    49: 'Das Buzz-Kopplungs-Relay ist bereit',
+    50: 'Das Buzz-Kopplungs-Relay ist nicht bereit',
   },
   pl_PL: {
     0: 'Interfejs webowy Buzz',
@@ -153,6 +157,8 @@ export default {
     46: 'Wybierz bieżący adres WebSocket StartOS używany do parowania urządzeń Buzz.',
     47: 'Przekaźnik parowania skonfigurowany',
     48: 'Przed uruchomieniem Buzz wybierz adres WebSocket dostępny obecnie w interfejsie parowania Buzz.',
+    49: 'Przekaźnik parowania Buzz jest gotowy',
+    50: 'Przekaźnik parowania Buzz nie jest gotowy',
   },
   fr_FR: {
     0: 'Interface web de Buzz',
@@ -204,5 +210,7 @@ export default {
     46: 'Sélectionnez l’adresse WebSocket StartOS actuelle utilisée pour appairer les appareils Buzz.',
     47: 'Relais d’appairage configuré',
     48: 'Avant de démarrer Buzz, sélectionnez une adresse WebSocket actuellement disponible sur l’interface d’appairage Buzz.',
+    49: 'Le relais d’appairage Buzz est prêt',
+    50: 'Le relais d’appairage Buzz n’est pas prêt',
   },
 } satisfies Record<'es_ES' | 'de_DE' | 'pl_PL' | 'fr_FR', LangDict>
