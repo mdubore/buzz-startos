@@ -5,6 +5,7 @@ import {
   configurePairingRelayWith,
   type PairingRelayConfigurationDependencies,
 } from '../startos/actions/configure-pairing-relay.js'
+import { connectionInformationWith } from '../startos/actions/connection-information.js'
 import { normalizePairingRelayUrl } from '../startos/domain/pairing-url.js'
 import type { StoredStateRead } from '../startos/fileModels/read-store.js'
 import {
@@ -166,4 +167,32 @@ test('serializes concurrent pairing URL mutations through the authoritative read
     { pairingRelayUrl: 'wss://two.example' },
   ])
   assert.equal(state.value.pairingRelayUrl, 'wss://two.example')
+})
+
+test('connection information exposes the selected pairing relay URL', async () => {
+  const result = await connectionInformationWith(async () =>
+    parsed({
+      ...VALID_STATE,
+      pairingRelayUrl: 'wss://pair.buzz.example',
+    }),
+  )
+
+  assert.equal(result.result.type, 'group')
+  if (result.result.type !== 'group') {
+    throw new Error('connection information must return a group')
+  }
+  assert.deepEqual(
+    result.result.value.find(
+      (entry) => entry.name === 'Pairing Relay WebSocket URL',
+    ),
+    {
+      type: 'single',
+      name: 'Pairing Relay WebSocket URL',
+      description: null,
+      value: 'wss://pair.buzz.example',
+      masked: false,
+      copyable: true,
+      qr: false,
+    },
+  )
 })

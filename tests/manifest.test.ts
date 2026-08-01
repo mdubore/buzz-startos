@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import { IMPOSSIBLE } from '@start9labs/start-sdk'
@@ -154,9 +155,9 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Verify Canonical URL',
     'Verify that the original immutable StartOS address is available after a restore or gateway change.',
     'Connection Information',
-    'Show the canonical addresses and owner public key used by external Buzz clients.',
+    'Show the canonical, relay, and pairing addresses and owner public key used by external Buzz clients.',
     'Buzz Connection Information',
-    'Use these values in the Buzz desktop client; mobile clients are still under development, and the StartOS interface does not provide the full Buzz experience.',
+    'Normal mobile traffic uses the main relay. Use the pairing relay only when adding a device. The current verified beta configuration is LAN-only.',
     'Owner Public Key (Hex)',
     'Buzz stored state requires recovery. Restore a known-good StartOS backup or reset and reinstall Buzz.',
     'Complete initial setup before starting Buzz.',
@@ -186,6 +187,8 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Select the current StartOS WebSocket address used to pair Buzz devices.',
     'Pairing Relay Configured',
     'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.',
+    'Buzz Pairing Relay is ready',
+    'Buzz Pairing Relay is not ready',
   ] as const
 
   assert.deepEqual(Object.keys(defaultDict), requiredKeys)
@@ -214,7 +217,7 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
 
   assert.equal(
     translations.es_ES[19],
-    'Usa estos valores en el cliente de escritorio de Buzz; los clientes móviles aún están en desarrollo y la interfaz de StartOS no ofrece la experiencia completa de Buzz.',
+    'El tráfico móvil normal usa el relay principal. Usa el relay de emparejamiento solo al añadir un dispositivo. La configuración beta verificada actual funciona solo en la red local.',
   )
   assert.equal(
     translations.de_DE[13],
@@ -222,11 +225,11 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
   )
   assert.equal(
     translations.de_DE[17],
-    'Zeigt die kanonischen Adressen und den öffentlichen Schlüssel des Eigentümers für externe Buzz-Clients.',
+    'Zeigt die kanonische Adresse, die Relay- und Kopplungsadressen sowie den öffentlichen Schlüssel des Eigentümers für externe Buzz-Clients.',
   )
   assert.equal(
     translations.de_DE[19],
-    'Verwende diese Werte im Buzz-Desktop-Client; die Mobil-Clients befinden sich noch in Entwicklung, und die StartOS-Schnittstelle bietet nicht das vollständige Buzz-Erlebnis.',
+    'Normaler mobiler Datenverkehr nutzt das Haupt-Relay. Verwenden Sie das Kopplungs-Relay nur beim Hinzufügen eines Geräts. Die derzeit verifizierte Beta-Konfiguration funktioniert nur im lokalen Netzwerk.',
   )
   assert.equal(
     translations.de_DE[20],
@@ -238,10 +241,27 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
   )
   assert.equal(
     translations.pl_PL[19],
-    'Użyj tych wartości w komputerowym kliencie Buzz; klienty mobilne są nadal w fazie rozwoju, a interfejs StartOS nie zapewnia pełnych możliwości Buzz.',
+    'Zwykły ruch mobilny korzysta z głównego przekaźnika. Przekaźnika parowania używaj tylko podczas dodawania urządzenia. Obecnie zweryfikowana konfiguracja beta działa wyłącznie w sieci lokalnej.',
   )
   assert.equal(
     translations.fr_FR[19],
-    'Utilisez ces valeurs dans le client Buzz de bureau ; les clients mobiles sont encore en cours de développement et l’interface StartOS ne fournit pas l’expérience Buzz complète.',
+    'Le trafic mobile normal utilise le relais principal. Utilisez le relais d’appairage uniquement lors de l’ajout d’un appareil. La configuration bêta actuellement vérifiée fonctionne uniquement sur le réseau local.',
   )
+})
+
+test('documents the exact LAN-only mobile pairing beta boundary', async () => {
+  const documents = await Promise.all(
+    ['README.md', 'instructions.md'].map((path) => readFile(path, 'utf8')),
+  )
+
+  for (const document of documents) {
+    assert.match(document, /current verified beta configuration is LAN-only/i)
+    assert.match(document, /does not enable remote access/i)
+    assert.match(document, /unmodified Android/i)
+    assert.match(document, /StartOS Root CA/i)
+    assert.match(document, /StartTunnel/i)
+    assert.match(document, /\/pair.*404|404.*\/pair/is)
+    assert.match(document, /stateless/i)
+    assert.match(document, /normal mobile\s+traffic.*main relay/is)
+  }
 })

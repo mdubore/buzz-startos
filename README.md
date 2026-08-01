@@ -30,9 +30,9 @@ a chain or token.
 ## What This Package Runs
 
 This package runs the **Buzz relay/backend**, not the full Buzz client. Use an
-external Buzz desktop client for the complete workspace interface. Upstream
-mobile clients are under development and have not been validated with this
-package.
+external Buzz desktop client for the complete workspace interface. A
+server-side local mobile-pairing beta is included, but the unmodified Android
+client has not been validated with this package.
 
 The relay image includes a limited browser surface for invite and repository
 routes. Those routes do not provide the complete channels, DMs, canvases,
@@ -46,6 +46,7 @@ MinIO client are packaged as private subcontainers in the same service.
 | Component | StartOS purpose |
 | --- | --- |
 | Buzz | Serves the Nostr relay, HTTP APIs, WebSocket connections, limited browser routes, media gateway, and Git Smart HTTP endpoint. |
+| Buzz pairing relay | Provides the temporary, stateless WebSocket rendezvous used only while one Buzz device transfers account data to another. |
 | PostgreSQL | Stores authoritative events, communities, membership, search data, workflow state, audit history, and repository metadata. |
 | Redis | Provides pub/sub, coordination, presence, rate limiting, and NIP-98 replay state. AOF persistence is enabled for continuity. |
 | MinIO | Stores authoritative media and durable Git objects, manifests, and packs in the `buzz-media` bucket. |
@@ -58,11 +59,12 @@ not duplicate mutable tags.
 
 ## Network Model
 
-StartOS binds one service port:
+StartOS binds two service ports:
 
 | Scope | Port | Purpose |
 | --- | ---: | --- |
-| StartOS interface | `3000` | Buzz HTTP, WebSocket relay, media, and Git traffic |
+| Main StartOS interface | `3000` | Buzz HTTP, main WebSocket relay, media, and Git traffic |
+| Pairing StartOS interface | `5000` | Temporary WebSocket rendezvous for adding a Buzz device |
 | Internal only | `5432` | PostgreSQL |
 | Internal only | `6379` | Redis |
 | Internal only | `9000` | MinIO API |
@@ -79,10 +81,10 @@ TLS. The enabled StartOS address and proxy supply TLS for HTTPS and secure
 WebSockets.
 
 LAN, Tor, and public gateway reachability are StartOS choices made by the
-operator for this interface. This package does not enable Tor or public access
-automatically. Enable only the gateway addresses you intend to operate, and do
-not assume that adding a second address makes it an alias for the selected
-Buzz community.
+operator for each interface. This package does not enable remote access, Tor,
+or public access automatically. Enable only the gateway addresses you intend
+to operate, and do not assume that adding a second address makes it an alias
+for the selected Buzz community.
 
 ## Sideload
 
@@ -130,20 +132,23 @@ Buzz will not start an unconfigured or ambiguously restored community.
 2. Enter the owner's Nostr public key as an `npub` or 64-character hexadecimal
    key.
 3. Select the StartOS URL that will permanently identify this Buzz community.
-4. Confirm the normalized URL, then start Buzz after the critical task clears.
+4. Complete the subsequent **Configure Pairing Relay** task by selecting a
+   WebSocket address exported by the pairing interface.
+5. Start Buzz after both critical tasks clear.
 
 Treat the selected canonical URL as immutable. Buzz uses it for tenant
 identity, NIP-42 and NIP-98 challenges, media links, Git URLs, and CORS.
 Changing only an address would identify a different empty community, so this
 package blocks startup instead of silently substituting another host.
 
-StartOS can present three distinct blocking tasks:
+StartOS can present four distinct blocking tasks:
 
 | Task | Meaning | Resolution |
 | --- | --- | --- |
 | Complete Initial Setup | Stable secrets exist, but owner identity and canonical URL have not been chosen. | Enter the owner key and select the permanent URL. |
 | Verify Stable State | The wrapper store is missing, unreadable, or malformed. | Restore a known-good StartOS backup, or reset and reinstall; then verify the recovered state. |
 | Verify Canonical URL | Restored state is valid, but the original URL is not currently available on the interface. | Restore that exact StartOS address, then verify it. |
+| Configure Pairing Relay | The pairing URL is missing or is no longer exported by the pairing interface. | Select a currently available pairing WebSocket address. Unlike the canonical URL, this value can be replaced after a gateway change. |
 
 Stable secrets are generated only on a fresh installation. Restart, container
 rebuild, update, and restore do not rotate them.
@@ -160,10 +165,49 @@ key in the external client to authenticate as that identity.
 4. Authenticate with the matching private key for the owner or an admitted
    member.
 
-The action also shows the canonical web URL and normalized owner public key.
-It never returns relay, database, Redis, MinIO, or HMAC secrets. Mobile client
-support remains upstream work in progress and is not part of the current
-device-test claim.
+The action also shows the canonical web URL, the **Pairing Relay WebSocket
+URL**, and the normalized owner public key. It never returns relay, database,
+Redis, MinIO, or HMAC secrets.
+
+## Local Mobile Pairing Beta
+
+The current verified beta configuration is LAN-only. This package declares a
+main interface and a pairing interface, but it does not enable remote access.
+Mobile use outside the local network is not supported or validated by this
+configuration.
+
+The earlier package advertised NIP-43 support without setting an explicit
+pairing relay URL. Buzz Desktop therefore derived `/pair` from the main relay
+address. Only `buzz-relay` was listening there, and `/pair` was not one of its
+WebSocket routes, so the upgrade request received `404 Not Found` instead of a
+QR-code pairing session.
+
+This beta runs the upstream `buzz-pair-relay` binary on the dedicated pairing
+interface and injects the selected WSS address as
+`BUZZ_PAIRING_RELAY_URL`. The pairing relay is temporary and stateless: it
+serves only as the rendezvous for the encrypted account transfer. After
+pairing, normal mobile traffic uses the main relay, not the pairing relay.
+
+To exercise the server-side local flow:
+
+1. Keep the desktop and Android device on the same local network.
+2. Complete **Configure Pairing Relay** with a LAN-reachable WSS address.
+3. Confirm **Buzz Pairing Relay** is healthy.
+4. In Buzz Desktop, start **Add mobile**, then scan the QR code in Buzz Android.
+
+Removing the 404 fixes the missing server route; it does not yet prove the
+unmodified Android application can complete TLS. A private `.local`, IP, or
+private-domain address normally presents a certificate signed by the StartOS
+Root CA. The unmodified Android client has not been validated to trust that
+user-installed CA, so certificate trust is the next expected device gate. Do
+not weaken certificate or hostname validation to work around it.
+
+Remote mobile interoperability is deferred to a separate StartTunnel-on-VPS
+project and user guide. The intended long-term design uses real domains and
+publicly trusted certificates for both interfaces, ideally without further
+changes to `buzz-startos`. Until that deployment is separately configured and
+validated, this package makes no Tor, clearnet, or StartTunnel reachability
+claim.
 
 ## Building A Client For StartOS WSS
 
@@ -322,10 +366,14 @@ Startup is ordered:
 2. Create the MinIO bucket idempotently and keep anonymous bucket access
    disabled.
 3. Run `buzz-admin migrate` with only the database environment.
-4. Start Buzz with automatic migrations disabled.
-5. Let Buzz run its S3 conditional-write conformance probe.
-6. Report the user-facing **Buzz Relay** health check only when Buzz readiness
+4. Start the independent, stateless pairing relay and require its expected
+   HTTP `400` response to a non-WebSocket probe.
+5. Start Buzz with automatic migrations disabled; it does not depend on the
+   pairing daemon, so an outage cannot take down an active collaboration relay.
+6. Let Buzz run its S3 conditional-write conformance probe.
+7. Report the user-facing **Buzz Relay** health check only when Buzz readiness
    and MinIO liveness both succeed.
+8. Report **Buzz Pairing Relay** health separately.
 
 PostgreSQL uses `pg_isready`, Redis requires an authenticated `PONG`, and MinIO
 uses its liveness endpoint. A sidecar, bucket, migration, S3 conformance, relay,
@@ -335,6 +383,11 @@ or later MinIO failure prevents a healthy service state.
 
 - **Canonical URL is immutable.** There is no host-rename migration. An
   unavailable original address blocks startup.
+- **Remote mobile is not enabled.** The current verified beta configuration is
+  LAN-only. An operator must separately provide routable addresses, DNS, and
+  trusted certificates before remote mobile can be evaluated.
+- **Unmodified Android trust is pending.** The pairing 404 is fixed server-side,
+  but the Android application has not been proven to trust the StartOS Root CA.
 - **Unknown hosts fail closed for tenant data.** A generic NIP-11 document or
   static shell may be served before tenant binding, but tenant-bearing HTTP and
   WebSocket operations cannot select a fallback community.
@@ -487,9 +540,10 @@ security_status: ":2 predates unauthorized role-change fix 00ecf2c"
 full_client:
   required: true
   desktop: external Buzz desktop application
-  mobile: upstream work in progress; not validated
+  mobile: server-side local pairing beta; unmodified Android TLS not validated
 public_ports:
   buzz_http_websocket: 3000
+  buzz_pairing_websocket: 5000
 internal_ports:
   postgres: 5432
   redis: 6379
@@ -500,6 +554,7 @@ internal_ports:
 actions:
   visible:
     - connection-information
+    - configure-pairing-relay
     - add-member
     - remove-member
     - list-members
@@ -507,6 +562,7 @@ actions:
     - complete-initial-setup
     - verify-stable-state
     - verify-canonical-url
+    - configure-pairing-relay
 volumes:
   startos: wrapper state and stable secrets
   postgres: authoritative structured data and events
