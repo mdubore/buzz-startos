@@ -1,5 +1,9 @@
 # Remaining Release Work
 
+- [ ] After the local pairing beta, create and validate a StartTunnel VPS setup
+      and user guide for unmodified Buzz Android clients. Cover real main and
+      pairing domains, publicly trusted certificates, optional split DNS, and
+      LAN/cellular acceptance testing without further `buzz-startos` changes.
 - [ ] Rebuild both architecture packages from the final release commit,
       generate `SHA256SUMS`, inspect both manifests and commitments, and verify
       both archives against the committed signing public key.
