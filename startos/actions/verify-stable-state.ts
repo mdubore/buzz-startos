@@ -3,7 +3,10 @@ import { readStoredStateOnce } from '../fileModels/read-store.js'
 import { i18n } from '../i18n/index.js'
 import { reconcileBlockingTasks } from '../init/reconcile-blocking-tasks.js'
 import { sdk } from '../sdk.js'
-import { readWebInterfaceOriginsOnce } from '../utils.js'
+import {
+  readPairingInterfaceUrlsOnce,
+  readWebInterfaceOriginsOnce,
+} from '../utils.js'
 
 export const verifyStableState = sdk.Action.withoutInput(
   'verify-stable-state',
@@ -26,6 +29,7 @@ export const verifyStableState = sdk.Action.withoutInput(
     }
 
     const origins = await readWebInterfaceOriginsOnce(effects)
-    await reconcileBlockingTasks(effects, validation, origins)
+    const pairingUrls = await readPairingInterfaceUrlsOnce(effects)
+    await reconcileBlockingTasks(effects, validation, origins, pairingUrls)
   },
 )

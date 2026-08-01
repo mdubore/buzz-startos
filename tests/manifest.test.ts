@@ -178,6 +178,14 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Member Removed',
     'Normalized Nostr Public Key',
     'Relay Members',
+    'Buzz Pairing Relay',
+    'Ephemeral WebSocket endpoint for pairing Buzz devices.',
+    'Pairing Relay WebSocket URL',
+    'Select the StartOS WebSocket address Buzz will advertise for device pairing.',
+    'Configure Pairing Relay',
+    'Select the current StartOS WebSocket address used to pair Buzz devices.',
+    'Pairing Relay Configured',
+    'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.',
   ] as const
 
   assert.deepEqual(Object.keys(defaultDict), requiredKeys)

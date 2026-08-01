@@ -2,6 +2,7 @@ import type { T } from '@start9labs/start-sdk'
 
 import { POSTGRES_DB, POSTGRES_USER, S3_BUCKET } from './constants.js'
 import { readRuntimeStateConst } from './domain/state-validation.js'
+import { pairingRelayUrlIsAvailable } from './domain/pairing-url.js'
 import { i18n } from './i18n/index.js'
 import { reconcileBlockingTasks } from './init/reconcile-blocking-tasks.js'
 import {
@@ -19,6 +20,7 @@ import {
 import { sdk } from './sdk.js'
 import {
   canonicalUrlIsAvailable,
+  readPairingInterfaceUrlsConst,
   readWebInterfaceOriginsConst,
 } from './utils.js'
 
@@ -293,8 +295,9 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
 export const main = sdk.setupMain(async ({ effects }) => {
   const stateValidation = await readRuntimeStateConst(effects)
   const origins = await readWebInterfaceOriginsConst(effects)
+  const pairingUrls = await readPairingInterfaceUrlsConst(effects)
 
-  await reconcileBlockingTasks(effects, stateValidation, origins)
+  await reconcileBlockingTasks(effects, stateValidation, origins, pairingUrls)
 
   if (stateValidation.kind === 'needs-state-recovery') {
     throw new Error('Buzz cannot start until stable state is recovered')
@@ -304,6 +307,19 @@ export const main = sdk.setupMain(async ({ effects }) => {
   }
   if (!canonicalUrlIsAvailable(stateValidation.state.primaryUrl, origins)) {
     throw new Error('Buzz cannot start until its canonical URL is restored')
+  }
+  if (stateValidation.state.pairingRelayUrl === undefined) {
+    throw new Error('Buzz cannot start until its pairing relay is configured')
+  }
+  if (
+    !pairingRelayUrlIsAvailable(
+      stateValidation.state.pairingRelayUrl,
+      pairingUrls,
+    )
+  ) {
+    throw new Error(
+      'Buzz cannot start until its configured pairing relay URL is available',
+    )
   }
 
   return buildNativeStack(effects, buildRuntimeConfig(stateValidation))
