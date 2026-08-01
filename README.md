@@ -341,7 +341,7 @@ the disabled upstream admin dashboard/API.
 
 | Volume | Contents | Backup policy |
 | --- | --- | --- |
-| `startos` | Wrapper schema, stable secrets, owner key, canonical URL, membership scheduling timestamp | Included |
+| `startos` | Wrapper schema, stable secrets, owner key, canonical URL, mutable pairing URL, membership scheduling timestamp | Included |
 | `postgres` | PostgreSQL data directory | Excluded as raw files; replaced by an SDK-managed logical dump and restore |
 | `redis` | Redis AOF and useful transient coordination state | Included |
 | `media` | MinIO's authoritative media and durable Git object storage | Included |
@@ -500,9 +500,10 @@ Runtime behavior still requires real x86_64 and aarch64 StartOS device tests.
 
 ## Status
 
-- The automated suite contains 130 tests covering identity, immutable URL
-  state, secrets, runtime configuration, daemon health, membership
-  serialization, backup policy, and release workflow policy.
+- The automated suite contains 146 tests covering identity, immutable and
+  pairing URL state, secrets, runtime configuration, daemon health, membership
+  serialization, backup policy, documentation boundaries, and release workflow
+  policy.
 - Type checking, formatting, SDK lint, and package compilation are automated
   gates.
 - The public

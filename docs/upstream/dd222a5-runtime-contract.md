@@ -30,9 +30,9 @@ runtime manifests carry
 ## Image runtime
 
 The [runtime Dockerfile](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/Dockerfile#L114-L159)
-creates `buzz:buzz` as UID/GID 1000, installs `curl`, copies the relay and admin
-binaries, exposes the three ports, selects `USER buzz:buzz`, and sets the relay
-entrypoint.
+creates `buzz:buzz` as UID/GID 1000, installs `curl`, copies the relay, pairing
+relay, and admin binaries, exposes the three ports, selects `USER buzz:buzz`,
+and sets the relay entrypoint.
 
 The following facts were also checked against each pulled platform manifest,
 not inferred only from the Dockerfile:
@@ -48,6 +48,7 @@ not inferred only from the Dockerfile:
 | `/usr/bin/curl` | present and executable | present and executable |
 | `/usr/local/bin/buzz-relay` | present and executable | present and executable |
 | `/usr/local/bin/buzz-admin` | present and executable | present and executable |
+| `/usr/local/bin/buzz-pair-relay` | present and executable | present and executable |
 
 Port 3000 carries the HTTP/WebSocket application, port 8080 carries liveness
 and readiness, and port 9102 carries Prometheus metrics, as documented by the
@@ -307,10 +308,10 @@ docker pull --platform linux/arm64 ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83
 docker image inspect ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152
 docker image inspect ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7
 AMD64_FS_CONTAINER="$(docker create --platform linux/amd64 ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152)"
-docker export "$AMD64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin
+docker export "$AMD64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin usr/local/bin/buzz-pair-relay
 docker rm "$AMD64_FS_CONTAINER"
 ARM64_FS_CONTAINER="$(docker create --platform linux/arm64 ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7)"
-docker export "$ARM64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin
+docker export "$ARM64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin usr/local/bin/buzz-pair-relay
 docker rm "$ARM64_FS_CONTAINER"
 docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/buzz-admin ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152 migrate --help
 docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/buzz-admin ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152 add-member --help
