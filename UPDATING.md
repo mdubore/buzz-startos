@@ -2,14 +2,49 @@
 
 Buzz application source and StartOS packaging have separate histories:
 
-- `../buzz9` mirrors `block/buzz` with no StartOS commits.
-- this repository contains only packaging, tests, assets, and documentation.
+- `../buzz9` is the `mdubore/buzz9` downstream companion-client fork of
+  `block/buzz`; it currently carries the reviewed native-root changes for the
+  desktop and `buzz-acp` relay clients.
+- this repository contains the StartOS server packaging, tests, assets, and
+  documentation. Its Buzz container pin is an official `block/buzz` image and
+  does not embed the companion fork's application commits.
 
 Never auto-merge an upstream commit into a release. Every selected snapshot
 requires a runtime-contract review, immutable image pins, both package builds,
 and a reviewed pull request.
 
-## 1. Fast-Forward The Source Mirror
+## Current Package Baseline
+
+The current package identity is:
+
+```text
+0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2
+```
+
+Its upstream portion is the exact official Buzz snapshot
+`63496cc1d4c6f1b7c613801bdcc694169dcf391a`; `:2` is the downstream StartOS
+wrapper revision. This revision retains the production-readiness and security
+controls, includes upstream authorization fix `00ecf2c`, recursively repairs
+only the disposable Git cache for overlay-backed installations, and adds the
+dedicated LAN-only pairing relay. The package is still test-only because its
+native images have critical vulnerability findings and live StartOS/device
+validation remains incomplete.
+
+The current immutable Buzz image pins are:
+
+| Input         | Exact current value                                                       |
+| ------------- | ------------------------------------------------------------------------- |
+| Upstream tag  | `ghcr.io/block/buzz:sha-63496cc`                                          |
+| OCI index     | `sha256:9de8aff13af33f3b17659e6eacda024b3070efda911c5e08d4d85a6c01c4deb6` |
+| `linux/amd64` | `sha256:5ac4697562230d32de4473d2eaf2eab098300c8aae1721e6bd4bf00b2956a5bf` |
+| `linux/arm64` | `sha256:414d8e183f3ccd45eb228cfdb1d6d88da463dd7440bc726c500abd435d0e7c3c` |
+
+`docs/upstream/63496cc-runtime-contract.md` is the current upstream evidence.
+`docs/upstream/dd222a5-runtime-contract.md` is preserved only as the historical
+contract for the first published package; it does not describe the current
+snapshot or downstream revision.
+
+## 1. Prepare A Reviewed Companion-Fork Update
 
 Run from the `buzz-startos` package root. The expected `buzz9` remotes are:
 
@@ -18,10 +53,10 @@ origin   https://github.com/mdubore/buzz9.git
 upstream https://github.com/block/buzz.git
 ```
 
-Read the currently packaged commit before entering or changing the source
-mirror. Then fetch both remotes, prove that the package baseline and fork are
-ancestors of upstream, incorporate only a fast-forward from `origin`, and
-accept only an upstream fast-forward:
+Read the currently packaged official commit before entering the companion
+fork. Fetch both remotes, prove that the package baseline is an ancestor of the
+selected official upstream head, and create an update branch from the current
+fork head. Never update `main` directly:
 
 ```bash
 (
@@ -47,40 +82,40 @@ accept only an upstream fast-forward:
   git fetch --prune origin main
   git fetch --prune upstream main
   git cat-file -e "$old_sha^{commit}"
-  git merge-base --is-ancestor "$old_sha" upstream/main
-  git switch main
-  git pull --ff-only origin main
+  upstream_sha="$(git rev-parse upstream/main)"
+  fork_sha="$(git rev-parse origin/main)"
+  [[ "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]
+  [[ "$fork_sha" =~ ^[0-9a-f]{40}$ ]]
+  git merge-base --is-ancestor "$old_sha" "$upstream_sha"
+  test "$old_sha" != "$upstream_sha"
 
-  git merge-base --is-ancestor origin/main upstream/main
-  read -r ahead behind < <(
-    git rev-list --left-right --count main...upstream/main
-  )
-  printf 'main ahead=%s behind=%s\n' "$ahead" "$behind"
-  test "$ahead" -eq 0
+  git rev-list --left-right --count upstream/main...origin/main
+  git log --oneline --left-right --cherry-pick upstream/main...origin/main
 
-  git merge --ff-only upstream/main
-  new_sha="$(git rev-parse HEAD)"
-  [[ "$new_sha" =~ ^[0-9a-f]{40}$ ]]
-  test "$old_sha" != "$new_sha"
-  git merge-base --is-ancestor "$old_sha" "$new_sha"
+  update_branch="update/upstream-${upstream_sha:0:12}"
+  ! git show-ref --verify --quiet "refs/heads/$update_branch"
+  git switch -c "$update_branch" origin/main
 
-  git push origin main
-  git fetch --prune origin main
-  test "$(git rev-parse origin/main)" = "$new_sha"
-  test "$(git rev-parse upstream/main)" = "$new_sha"
-  read -r origin_ahead upstream_ahead < <(
-    git rev-list --left-right --count origin/main...upstream/main
-  )
-  test "$origin_ahead" -eq 0
-  test "$upstream_ahead" -eq 0
-  test -z "$(git status --porcelain)"
+  if ! git merge-base --is-ancestor "$upstream_sha" HEAD; then
+    git merge --no-ff --no-commit "$upstream_sha"
+  fi
   git status --short --branch
 )
 ```
 
-If `ahead` is nonzero, the mirror contains downstream commits. Stop and review
-the history; do not force-push, rebase published commits, or merge around the
-condition.
+The divergence count is informational: this is a maintained downstream fork,
+so commits on the origin side are expected. Review the complete graph and
+reassess whether each downstream client commit is still needed after the
+upstream integration. In particular, preserve or deliberately replace the
+native-root behavior in both Buzz Desktop and `buzz-acp`; do not silently drop
+one path or copy those client changes into the StartOS server image.
+
+Run the checks and client packaging process documented by the fork's current
+`README.md` and `AGENTS.md`. After the upstream integration and downstream
+client behavior have been reviewed, commit the update branch, push that branch,
+and land it into the fork's `main` only through a reviewed pull request. Do not
+blindly merge, push directly to `main`, force-push, or assume the fork should be
+identical to upstream.
 
 ## 2. Audit The Runtime Contract
 
@@ -95,7 +130,7 @@ Review the complete range before touching package pins:
   old_sha="$(
     sed -nE "s/^  commit: '([0-9a-f]{40})',$/\1/p" startos/image-pins.ts
   )"
-  new_sha="$(git -C ../buzz9 rev-parse HEAD)"
+  new_sha="$(git -C ../buzz9 rev-parse upstream/main)"
   [[ "$old_sha" =~ ^[0-9a-f]{40}$ ]]
   [[ "$new_sha" =~ ^[0-9a-f]{40}$ ]]
 
@@ -108,6 +143,7 @@ Review the complete range before touching package pins:
   git diff "$old_sha..$new_sha" -- \
     Dockerfile \
     crates/buzz-relay \
+    crates/buzz-pair-relay \
     crates/buzz-admin \
     crates/buzz-db \
     crates/buzz-media \
@@ -122,8 +158,8 @@ Review the complete range before touching package pins:
 Audit at least:
 
 - image user, entrypoint, installed binaries, health tools, and exposed ports;
-- relay and `buzz-admin` commands, arguments, required environment, and exit
-  behavior;
+- relay, `buzz-pair-relay`, and `buzz-admin` commands, arguments, required
+  environment, binding behavior, and exit behavior;
 - migrations, automatic-migration behavior, and PostgreSQL compatibility;
 - Compose sidecars, versions, volumes, ownership, ports, and startup order;
 - every new, removed, renamed, or default-changed environment variable;
@@ -144,7 +180,7 @@ Upstream publishes `ghcr.io/block/buzz:sha-<7-character-sha>`. Do not substitute
 (
   set -euo pipefail
 
-  new_sha="$(git -C ../buzz9 rev-parse HEAD)"
+  new_sha="$(git -C ../buzz9 rev-parse upstream/main)"
   [[ "$new_sha" =~ ^[0-9a-f]{40}$ ]]
   buzz_ref="ghcr.io/block/buzz:sha-${new_sha:0:7}"
 
@@ -171,7 +207,7 @@ Resolve the OCI index plus the two native runtime manifests:
 (
   set -euo pipefail
 
-  new_sha="$(git -C ../buzz9 rev-parse HEAD)"
+  new_sha="$(git -C ../buzz9 rev-parse upstream/main)"
   [[ "$new_sha" =~ ^[0-9a-f]{40}$ ]]
   buzz_ref="ghcr.io/block/buzz:sha-${new_sha:0:7}"
   index_digest="$(
@@ -212,7 +248,7 @@ Inspect both native image configs without executing either architecture:
 (
   set -euo pipefail
 
-  new_sha="$(git -C ../buzz9 rev-parse HEAD)"
+  new_sha="$(git -C ../buzz9 rev-parse upstream/main)"
   [[ "$new_sha" =~ ^[0-9a-f]{40}$ ]]
   buzz_ref="ghcr.io/block/buzz:sha-${new_sha:0:7}"
   raw_index="$(docker buildx imagetools inspect "$buzz_ref" --raw)"
@@ -254,8 +290,9 @@ Inspect both native image configs without executing either architecture:
 )
 ```
 
-Also inspect the filesystem on each platform for `curl`, `buzz-relay`, and
-`buzz-admin`, and rerun the four packaged CLI help commands:
+Also inspect the filesystem on each platform for `curl`, `buzz-relay`,
+`buzz-pair-relay`, and `buzz-admin`, and rerun the four packaged CLI help
+commands:
 
 ```text
 buzz-admin migrate --help
@@ -367,7 +404,9 @@ tag.
 
 The diagnostic
 [`dd222a5` runtime baseline](docs/security/dd222a5-runtime-scan.md) records why
-the existing Buzz image is blocked. It is not evidence for a newer candidate.
+that historical image was blocked. It is not evidence for the current
+`63496cc:2` package. Current evidence comes from the `63496cc` runtime contract,
+current scan record, and immutable pins.
 
 ## 7. Update Package Metadata
 
@@ -465,7 +504,9 @@ Leave any unexecuted row unchecked.
 Open a pull request containing:
 
 - selected old and new upstream SHAs;
-- proof that `buzz9` fast-forwarded and is `0 0` against upstream;
+- proof that the previous official package baseline is an ancestor of the
+  selected upstream snapshot, plus the recorded fork divergence and reviewed
+  disposition of its downstream companion-client commits;
 - audited runtime-contract changes;
 - immutable index/platform digest evidence;
 - exact automated checks and both build results;

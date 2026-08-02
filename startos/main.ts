@@ -1,7 +1,9 @@
 import type { T } from '@start9labs/start-sdk'
+import { createHash, randomBytes } from 'node:crypto'
 
 import { POSTGRES_DB, POSTGRES_USER, S3_BUCKET } from './constants.js'
 import { readRuntimeStateConst } from './domain/state-validation.js'
+import { pairingRelayUrlIsAvailable } from './domain/pairing-url.js'
 import { i18n } from './i18n/index.js'
 import { reconcileBlockingTasks } from './init/reconcile-blocking-tasks.js'
 import {
@@ -19,12 +21,106 @@ import {
 import { sdk } from './sdk.js'
 import {
   canonicalUrlIsAvailable,
+  readPairingInterfaceUrlsConst,
   readWebInterfaceOriginsConst,
 } from './utils.js'
 
 type ExecResult = {
   exitCode: number | null
   stdout?: string | Buffer
+}
+
+type PairingProbeRandomBytes = (size: number) => Uint8Array
+
+const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+
+export function buildPairingProbeCommand(
+  authority = '127.0.0.1:5000',
+  provideRandomBytes: PairingProbeRandomBytes = randomBytes,
+): { command: string[]; expectedAccept: string } {
+  const nonce = provideRandomBytes(16)
+  if (nonce.byteLength !== 16) {
+    throw new Error('Pairing probe nonce provider must return 16 bytes')
+  }
+
+  const requestKey = Buffer.from(nonce).toString('base64')
+  const expectedAccept = createHash('sha1')
+    .update(`${requestKey}${WEBSOCKET_GUID}`)
+    .digest('base64')
+
+  return {
+    command: [
+      'curl',
+      '--silent',
+      '--show-error',
+      '--http1.1',
+      '--max-time',
+      '2',
+      '--dump-header',
+      '-',
+      '--output',
+      '/dev/null',
+      '--header',
+      'Connection: Upgrade',
+      '--header',
+      'Upgrade: websocket',
+      '--header',
+      'Sec-WebSocket-Version: 13',
+      '--header',
+      `Sec-WebSocket-Key: ${requestKey}`,
+      `http://${authority}/`,
+    ],
+    expectedAccept,
+  }
+}
+
+export function pairingProbeSucceeded(
+  result: ExecResult,
+  expectedAccept: string,
+): boolean {
+  if (result.exitCode !== 0 && result.exitCode !== 28) return false
+
+  const output = result.stdout?.toString()
+  if (output === undefined) return false
+
+  const headerEnd = /\r?\n\r?\n/.exec(output)
+  if (headerEnd === null) return false
+
+  const [statusLine, ...headerLines] = output
+    .slice(0, headerEnd.index)
+    .split(/\r?\n/)
+  if (!/^HTTP\/1\.1 101 Switching Protocols$/i.test(statusLine ?? '')) {
+    return false
+  }
+
+  const headers = new Map<string, string[]>()
+  for (const line of headerLines) {
+    const separator = line.indexOf(':')
+    if (separator <= 0) return false
+
+    const name = line.slice(0, separator).trim().toLowerCase()
+    const value = line.slice(separator + 1).trim()
+    const values = headers.get(name) ?? []
+    values.push(value)
+    headers.set(name, values)
+  }
+
+  const connectionTokens = (headers.get('connection') ?? [])
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim().toLowerCase())
+  const upgradeTokens = (headers.get('upgrade') ?? []).map((value) =>
+    value.toLowerCase(),
+  )
+  const accepts = headers.get('sec-websocket-accept') ?? []
+
+  return (
+    connectionTokens.includes('upgrade') &&
+    upgradeTokens.includes('websocket') &&
+    accepts.length === 1 &&
+    accepts[0] === expectedAccept &&
+    !headers.has('sec-websocket-extensions') &&
+    !headers.has('sec-websocket-protocol')
+  )
 }
 
 function createLateDeliveringAbortController(parentSignal: AbortSignal) {
@@ -142,6 +238,24 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
     null,
     'minio-client',
   )
+  const pairingSub = sdk.SubContainer.of(
+    effects,
+    { imageId: 'buzz' },
+    null,
+    'pairing',
+  )
+
+  const pairingRelayIsReady = async () => {
+    try {
+      const probe = buildPairingProbeCommand()
+      return pairingProbeSucceeded(
+        await pairingSub.exec(probe.command),
+        probe.expectedAccept,
+      )
+    } catch {
+      return false
+    }
+  }
 
   const mcHost = buildConnectionUrl({
     protocol: 'http',
@@ -280,6 +394,24 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
       },
       requires: ['postgres', 'create-bucket', 'prepare-git-cache'],
     })
+    .addDaemon('pairing', {
+      subcontainer: pairingSub,
+      exec: {
+        command: ['/usr/local/bin/buzz-pair-relay'],
+        env: { BUZZ_PAIR_RELAY_BIND_ADDR: '0.0.0.0:5000' },
+      },
+      ready: {
+        display: null,
+        fn: async () =>
+          hiddenReadiness(
+            await pairingRelayIsReady(),
+            'Buzz Pairing Relay is ready',
+            'Buzz Pairing Relay is not ready',
+          ),
+        gracePeriod: 60_000,
+      },
+      requires: [],
+    })
     .addDaemon('buzz', {
       subcontainer: buzzSub,
       exec: {
@@ -303,13 +435,26 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
         'migrate',
       ],
     })
+    .addHealthCheck('pairing-relay', {
+      ready: {
+        display: i18n('Buzz Pairing Relay'),
+        fn: async () =>
+          hiddenReadiness(
+            await pairingRelayIsReady(),
+            i18n('Buzz Pairing Relay is ready'),
+            i18n('Buzz Pairing Relay is not ready'),
+          ),
+      },
+      requires: ['pairing'],
+    })
 }
 
 export const main = sdk.setupMain(async ({ effects }) => {
   const stateValidation = await readRuntimeStateConst(effects)
   const origins = await readWebInterfaceOriginsConst(effects)
+  const pairingUrls = await readPairingInterfaceUrlsConst(effects)
 
-  await reconcileBlockingTasks(effects, stateValidation, origins)
+  await reconcileBlockingTasks(effects, stateValidation, origins, pairingUrls)
 
   if (stateValidation.kind === 'needs-state-recovery') {
     throw new Error('Buzz cannot start until stable state is recovered')
@@ -319,6 +464,19 @@ export const main = sdk.setupMain(async ({ effects }) => {
   }
   if (!canonicalUrlIsAvailable(stateValidation.state.primaryUrl, origins)) {
     throw new Error('Buzz cannot start until its canonical URL is restored')
+  }
+  if (stateValidation.state.pairingRelayUrl === undefined) {
+    throw new Error('Buzz cannot start until its pairing relay is configured')
+  }
+  if (
+    !pairingRelayUrlIsAvailable(
+      stateValidation.state.pairingRelayUrl,
+      pairingUrls,
+    )
+  ) {
+    throw new Error(
+      'Buzz cannot start until its configured pairing relay URL is available',
+    )
   }
 
   return buildNativeStack(effects, buildRuntimeConfig(stateValidation))

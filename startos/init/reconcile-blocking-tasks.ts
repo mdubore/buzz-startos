@@ -1,9 +1,11 @@
 import type { T } from '@start9labs/start-sdk'
 
 import { completeInitialSetup } from '../actions/complete-initial-setup.js'
+import { configurePairingRelay } from '../actions/configure-pairing-relay.js'
 import { verifyCanonicalUrl } from '../actions/verify-canonical-url.js'
 import { verifyStableState } from '../actions/verify-stable-state.js'
 import {
+  PAIRING_SETUP_TASK_REPLAY_ID,
   SETUP_TASK_REPLAY_ID,
   STATE_RECOVERY_TASK_REPLAY_ID,
   URL_RECOVERY_TASK_REPLAY_ID,
@@ -12,6 +14,7 @@ import type {
   RuntimeStateValidation,
   StateValidation,
 } from '../domain/state-validation.js'
+import { pairingRelayUrlIsAvailable } from '../domain/pairing-url.js'
 import { i18n } from '../i18n/index.js'
 import { sdk } from '../sdk.js'
 import { canonicalUrlIsAvailable } from '../utils.js'
@@ -25,6 +28,7 @@ export type BlockingTaskDecision =
       clearReplayIds: [
         typeof SETUP_TASK_REPLAY_ID,
         typeof URL_RECOVERY_TASK_REPLAY_ID,
+        typeof PAIRING_SETUP_TASK_REPLAY_ID,
       ]
     }
   | {
@@ -33,6 +37,7 @@ export type BlockingTaskDecision =
       clearReplayIds: [
         typeof STATE_RECOVERY_TASK_REPLAY_ID,
         typeof URL_RECOVERY_TASK_REPLAY_ID,
+        typeof PAIRING_SETUP_TASK_REPLAY_ID,
       ]
     }
   | {
@@ -41,6 +46,16 @@ export type BlockingTaskDecision =
       clearReplayIds: [
         typeof STATE_RECOVERY_TASK_REPLAY_ID,
         typeof SETUP_TASK_REPLAY_ID,
+        typeof PAIRING_SETUP_TASK_REPLAY_ID,
+      ]
+    }
+  | {
+      actionId: 'configure-pairing-relay'
+      replayId: typeof PAIRING_SETUP_TASK_REPLAY_ID
+      clearReplayIds: [
+        typeof STATE_RECOVERY_TASK_REPLAY_ID,
+        typeof SETUP_TASK_REPLAY_ID,
+        typeof URL_RECOVERY_TASK_REPLAY_ID,
       ]
     }
   | {
@@ -50,18 +65,24 @@ export type BlockingTaskDecision =
         typeof STATE_RECOVERY_TASK_REPLAY_ID,
         typeof SETUP_TASK_REPLAY_ID,
         typeof URL_RECOVERY_TASK_REPLAY_ID,
+        typeof PAIRING_SETUP_TASK_REPLAY_ID,
       ]
     }
 
 export function selectBlockingTask(
   stateValidation: BlockingStateValidation,
   origins: readonly string[],
+  pairingUrls: readonly string[],
 ): BlockingTaskDecision {
   if (stateValidation.kind === 'needs-state-recovery') {
     return {
       actionId: 'verify-stable-state',
       replayId: STATE_RECOVERY_TASK_REPLAY_ID,
-      clearReplayIds: [SETUP_TASK_REPLAY_ID, URL_RECOVERY_TASK_REPLAY_ID],
+      clearReplayIds: [
+        SETUP_TASK_REPLAY_ID,
+        URL_RECOVERY_TASK_REPLAY_ID,
+        PAIRING_SETUP_TASK_REPLAY_ID,
+      ],
     }
   }
 
@@ -72,6 +93,7 @@ export function selectBlockingTask(
       clearReplayIds: [
         STATE_RECOVERY_TASK_REPLAY_ID,
         URL_RECOVERY_TASK_REPLAY_ID,
+        PAIRING_SETUP_TASK_REPLAY_ID,
       ],
     }
   }
@@ -80,7 +102,29 @@ export function selectBlockingTask(
     return {
       actionId: 'verify-canonical-url',
       replayId: URL_RECOVERY_TASK_REPLAY_ID,
-      clearReplayIds: [STATE_RECOVERY_TASK_REPLAY_ID, SETUP_TASK_REPLAY_ID],
+      clearReplayIds: [
+        STATE_RECOVERY_TASK_REPLAY_ID,
+        SETUP_TASK_REPLAY_ID,
+        PAIRING_SETUP_TASK_REPLAY_ID,
+      ],
+    }
+  }
+
+  if (
+    stateValidation.state.pairingRelayUrl === undefined ||
+    !pairingRelayUrlIsAvailable(
+      stateValidation.state.pairingRelayUrl,
+      pairingUrls,
+    )
+  ) {
+    return {
+      actionId: 'configure-pairing-relay',
+      replayId: PAIRING_SETUP_TASK_REPLAY_ID,
+      clearReplayIds: [
+        STATE_RECOVERY_TASK_REPLAY_ID,
+        SETUP_TASK_REPLAY_ID,
+        URL_RECOVERY_TASK_REPLAY_ID,
+      ],
     }
   }
 
@@ -91,6 +135,7 @@ export function selectBlockingTask(
       STATE_RECOVERY_TASK_REPLAY_ID,
       SETUP_TASK_REPLAY_ID,
       URL_RECOVERY_TASK_REPLAY_ID,
+      PAIRING_SETUP_TASK_REPLAY_ID,
     ],
   }
 }
@@ -99,8 +144,9 @@ export async function reconcileBlockingTasks(
   effects: T.Effects,
   stateValidation: BlockingStateValidation,
   origins: readonly string[],
+  pairingUrls: readonly string[],
 ): Promise<void> {
-  const decision = selectBlockingTask(stateValidation, origins)
+  const decision = selectBlockingTask(stateValidation, origins, pairingUrls)
 
   switch (decision.actionId) {
     case 'verify-stable-state':
@@ -129,6 +175,19 @@ export async function reconcileBlockingTasks(
           'The original canonical URL is unavailable. Restore that same StartOS address before starting Buzz.',
         ),
       })
+      break
+    case 'configure-pairing-relay':
+      await sdk.action.createOwnTask(
+        effects,
+        configurePairingRelay,
+        'critical',
+        {
+          replayId: decision.replayId,
+          reason: i18n(
+            'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.',
+          ),
+        },
+      )
       break
     case null:
       break

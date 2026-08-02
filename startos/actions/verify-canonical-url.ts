@@ -5,6 +5,7 @@ import { reconcileBlockingTasks } from '../init/reconcile-blocking-tasks.js'
 import { sdk } from '../sdk.js'
 import {
   canonicalUrlIsAvailable,
+  readPairingInterfaceUrlsOnce,
   readWebInterfaceOriginsOnce,
 } from '../utils.js'
 
@@ -34,12 +35,13 @@ export const verifyCanonicalUrl = sdk.Action.withoutInput(
     }
 
     const origins = await readWebInterfaceOriginsOnce(effects)
+    const pairingUrls = await readPairingInterfaceUrlsOnce(effects)
     if (!canonicalUrlIsAvailable(validation.state.primaryUrl, origins)) {
       throw new Error(
         'primaryUrl is unavailable. Restore the original StartOS address before starting Buzz.',
       )
     }
 
-    await reconcileBlockingTasks(effects, validation, origins)
+    await reconcileBlockingTasks(effects, validation, origins, pairingUrls)
   },
 )

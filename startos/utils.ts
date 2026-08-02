@@ -1,6 +1,14 @@
 import type { T } from '@start9labs/start-sdk'
 
-import { HOST_ID, WEB_INTERFACE_ID } from './constants.js'
+import {
+  BUZZ_PORT,
+  HOST_ID,
+  PAIRING_HOST_ID,
+  PAIRING_INTERFACE_ID,
+  PAIRING_PORT,
+  WEB_INTERFACE_ID,
+} from './constants.js'
+import { normalizePairingRelayUrl } from './domain/pairing-url.js'
 import { derivePublicConfig } from './domain/public-url.js'
 import { sdk } from './sdk.js'
 
@@ -34,29 +42,57 @@ function normalizeRootOrigin(value: unknown): string | null {
   }
 }
 
+function normalizeWebSocketOrigin(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    return normalizePairingRelayUrl(value)
+  } catch {
+    return null
+  }
+}
+
+function selectInterfaceUrls(
+  host: HostWithInterfaces | null | undefined,
+  port: number,
+  interfaceId: string,
+  normalize: (value: unknown) => string | null,
+): string[] {
+  const binding = host?.bindings?.[port]
+  const interfaces = binding?.interfaces ?? {}
+  const serviceInterface =
+    interfaces[interfaceId] ??
+    Object.values(interfaces).find((entry) => entry.id === interfaceId)
+  const formatted = serviceInterface?.addressInfo?.nonLocal?.format() ?? []
+  const urls = new Set<string>()
+
+  for (const value of formatted) {
+    const url = normalize(value)
+    if (url !== null) urls.add(url)
+  }
+
+  return [...urls]
+}
+
 export function selectWebInterfaceOrigins(
   host: HostWithInterfaces | null | undefined,
 ): string[] {
-  let webInterface: InterfaceAddress | undefined
-  for (const binding of Object.values(host?.bindings ?? {})) {
-    const interfaces = binding.interfaces ?? {}
-    webInterface =
-      interfaces[WEB_INTERFACE_ID] ??
-      Object.values(interfaces).find(
-        (serviceInterface) => serviceInterface.id === WEB_INTERFACE_ID,
-      )
-    if (webInterface) break
-  }
+  return selectInterfaceUrls(
+    host,
+    BUZZ_PORT,
+    WEB_INTERFACE_ID,
+    normalizeRootOrigin,
+  )
+}
 
-  const formatted = webInterface?.addressInfo?.nonLocal?.format() ?? []
-  const origins = new Set<string>()
-
-  for (const value of formatted) {
-    const origin = normalizeRootOrigin(value)
-    if (origin !== null) origins.add(origin)
-  }
-
-  return [...origins]
+export function selectPairingInterfaceUrls(
+  host: HostWithInterfaces | null | undefined,
+): string[] {
+  return selectInterfaceUrls(
+    host,
+    PAIRING_PORT,
+    PAIRING_INTERFACE_ID,
+    normalizeWebSocketOrigin,
+  )
 }
 
 export function canonicalUrlIsAvailable(
@@ -87,6 +123,26 @@ export async function readWebInterfaceOriginsConst(
   return (
     (await sdk.host
       .getOwn(effects, HOST_ID, selectWebInterfaceOrigins)
+      .const()) ?? []
+  )
+}
+
+export async function readPairingInterfaceUrlsOnce(
+  effects: T.Effects,
+): Promise<string[]> {
+  return (
+    (await sdk.host
+      .getOwn(effects, PAIRING_HOST_ID, selectPairingInterfaceUrls)
+      .once()) ?? []
+  )
+}
+
+export async function readPairingInterfaceUrlsConst(
+  effects: T.Effects,
+): Promise<string[]> {
+  return (
+    (await sdk.host
+      .getOwn(effects, PAIRING_HOST_ID, selectPairingInterfaceUrls)
       .const()) ?? []
   )
 }

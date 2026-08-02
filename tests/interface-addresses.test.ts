@@ -6,6 +6,10 @@ import {
   BUZZ_METRICS_PORT,
   BUZZ_PORT,
   HOST_ID,
+  PAIRING_HOST_ID,
+  PAIRING_INTERFACE_ID,
+  PAIRING_PORT,
+  PAIRING_SETUP_TASK_REPLAY_ID,
   POSTGRES_DATA_PATH,
   POSTGRES_DB,
   POSTGRES_MOUNTPOINT,
@@ -19,6 +23,7 @@ import {
 } from '../startos/constants.js'
 import {
   canonicalUrlIsAvailable,
+  selectPairingInterfaceUrls,
   selectWebInterfaceOrigins,
 } from '../startos/utils.js'
 
@@ -41,12 +46,34 @@ function hostWithAddresses(nonLocal: string[], all = nonLocal) {
   }
 }
 
+function pairingHostWithAddresses(nonLocal: string[], all = nonLocal) {
+  return {
+    bindings: {
+      [PAIRING_PORT]: {
+        interfaces: {
+          [PAIRING_INTERFACE_ID]: {
+            addressInfo: {
+              format: () => all,
+              nonLocal: {
+                format: () => nonLocal,
+              },
+            },
+          },
+        },
+      },
+    },
+  }
+}
+
 test('declares the exact Buzz runtime ports, names, and replay IDs', () => {
   assert.deepEqual(
     {
       HOST_ID,
       WEB_INTERFACE_ID,
       RELAY_INTERFACE_ID,
+      PAIRING_HOST_ID,
+      PAIRING_INTERFACE_ID,
+      PAIRING_PORT,
       BUZZ_PORT,
       BUZZ_HEALTH_PORT,
       BUZZ_METRICS_PORT,
@@ -58,11 +85,15 @@ test('declares the exact Buzz runtime ports, names, and replay IDs', () => {
       SETUP_TASK_REPLAY_ID,
       STATE_RECOVERY_TASK_REPLAY_ID,
       URL_RECOVERY_TASK_REPLAY_ID,
+      PAIRING_SETUP_TASK_REPLAY_ID,
     },
     {
       HOST_ID: 'buzz',
       WEB_INTERFACE_ID: 'web',
       RELAY_INTERFACE_ID: 'relay',
+      PAIRING_HOST_ID: 'buzz-pairing',
+      PAIRING_INTERFACE_ID: 'pairing-relay',
+      PAIRING_PORT: 5000,
       BUZZ_PORT: 3000,
       BUZZ_HEALTH_PORT: 8080,
       BUZZ_METRICS_PORT: 9102,
@@ -74,7 +105,66 @@ test('declares the exact Buzz runtime ports, names, and replay IDs', () => {
       SETUP_TASK_REPLAY_ID: 'buzz:complete-initial-setup',
       STATE_RECOVERY_TASK_REPLAY_ID: 'buzz:verify-stable-state',
       URL_RECOVERY_TASK_REPLAY_ID: 'buzz:verify-canonical-url',
+      PAIRING_SETUP_TASK_REPLAY_ID: 'buzz:configure-pairing-relay',
     },
+  )
+})
+
+test('keeps only normalized root WebSocket pairing URLs', () => {
+  assert.deepEqual(
+    selectPairingInterfaceUrls(
+      pairingHostWithAddresses([
+        'wss://PAIR.BUZZ.EXAMPLE.:443/',
+        'ws://PAIR.BUZZ.LOCAL:5000/',
+        'https://pair.buzz.example',
+        'http://pair.buzz.example',
+        'wss://pair.buzz.example/path',
+        'wss://pair.buzz.example/?query=1',
+        'wss://user@pair.buzz.example',
+        'not-a-url',
+      ]),
+    ),
+    ['wss://pair.buzz.example', 'ws://pair.buzz.local:5000'],
+  )
+})
+
+test('deduplicates pairing URLs and excludes bridge-only addresses', () => {
+  const bridgeAddress = 'ws://10.0.3.1:5000'
+  const publicAddresses = [
+    'wss://pair.buzz.example',
+    'wss://PAIR.BUZZ.EXAMPLE:443/',
+  ]
+
+  assert.deepEqual(
+    selectPairingInterfaceUrls(
+      pairingHostWithAddresses(publicAddresses, [
+        bridgeAddress,
+        ...publicAddresses,
+      ]),
+    ),
+    ['wss://pair.buzz.example'],
+  )
+})
+
+test('returns no pairing URLs when its host, port, or interface is absent', () => {
+  assert.deepEqual(selectPairingInterfaceUrls(null), [])
+  assert.deepEqual(selectPairingInterfaceUrls(undefined), [])
+  assert.deepEqual(selectPairingInterfaceUrls({ bindings: {} }), [])
+  assert.deepEqual(
+    selectPairingInterfaceUrls({
+      bindings: {
+        [PAIRING_PORT]: {
+          interfaces: {
+            relay: {
+              addressInfo: {
+                nonLocal: { format: () => ['wss://pair.buzz.example'] },
+              },
+            },
+          },
+        },
+      },
+    }),
+    [],
   )
 })
 

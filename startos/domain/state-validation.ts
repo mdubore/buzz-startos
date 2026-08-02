@@ -9,6 +9,7 @@ import {
 } from '../fileModels/read-store.js'
 import { storeRawText, type RawStoreText } from '../fileModels/store.json.js'
 import { normalizeNostrPubkey } from './identity.js'
+import { normalizePairingRelayUrl } from './pairing-url.js'
 import { derivePublicConfig } from './public-url.js'
 import type { StableSecrets } from './secrets.js'
 
@@ -17,6 +18,7 @@ const LOWERCASE_HEX_64 = /^[0-9a-f]{64}$/
 export type CompleteStore = StableSecrets & {
   ownerPubkeyHex: string
   primaryUrl: string
+  pairingRelayUrl?: string
   lastMembershipMutationUnixSecond?: number
 }
 
@@ -110,6 +112,22 @@ export function validateStoredState(input: StoredStateRead): StateValidation {
     }
   }
 
+  let pairingRelayUrl: string | undefined
+  if (raw.pairingRelayUrl !== undefined) {
+    if (typeof raw.pairingRelayUrl !== 'string') {
+      issues.push('pairingRelayUrl')
+    } else {
+      try {
+        pairingRelayUrl = normalizePairingRelayUrl(raw.pairingRelayUrl)
+        if (pairingRelayUrl !== raw.pairingRelayUrl) {
+          issues.push('pairingRelayUrl')
+        }
+      } catch {
+        issues.push('pairingRelayUrl')
+      }
+    }
+  }
+
   let lastMembershipMutationUnixSecond: number | undefined
   if (raw.lastMembershipMutationUnixSecond !== undefined) {
     if (
@@ -147,6 +165,7 @@ export function validateStoredState(input: StoredStateRead): StateValidation {
       ...stableSecrets,
       ownerPubkeyHex,
       primaryUrl,
+      ...(pairingRelayUrl === undefined ? {} : { pairingRelayUrl }),
       ...(lastMembershipMutationUnixSecond === undefined
         ? {}
         : { lastMembershipMutationUnixSecond }),

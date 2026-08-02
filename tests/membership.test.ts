@@ -43,6 +43,7 @@ const VALID_STORE: RawStoredState = {
   gitHookHmacSecretHex: 'ab'.repeat(32),
   ownerPubkeyHex: OWNER,
   primaryUrl: 'https://buzz.example',
+  pairingRelayUrl: 'wss://pair.buzz.example',
 }
 
 const EXPECTED_MUTATION_ENV = {

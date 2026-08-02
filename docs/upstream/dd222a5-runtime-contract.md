@@ -1,24 +1,26 @@
 # Buzz `dd222a5` Runtime Contract
 
-This record freezes the upstream and container contract used by the first
-StartOS package. All upstream source links below are pinned to the full commit;
-mutable branch links are intentionally absent.
+Historical status: superseded by the current `63496cc` package. This record is
+preserved as immutable evidence for the first published StartOS package; it
+does not describe the current upstream snapshot or downstream revision. All
+upstream source links below are pinned to the full commit, and mutable branch
+links are intentionally absent.
 
 ## Selected snapshot
 
-| Item | Frozen value |
-| --- | --- |
-| Source commit | [`dd222a509b156ba52ed3219e895d7bf1cf322c92`](https://github.com/block/buzz/commit/dd222a509b156ba52ed3219e895d7bf1cf322c92) |
-| Commit timestamp | `2026-07-26T07:57:31Z` |
-| Relay crate version | [`0.2.0`](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/crates/buzz-relay/Cargo.toml#L1-L7) |
-| Published tag | `ghcr.io/block/buzz:sha-dd222a5` |
-| Immutable image reference | `ghcr.io/block/buzz:sha-dd222a5@sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9` |
+| Item                      | Frozen value                                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Source commit             | [`dd222a509b156ba52ed3219e895d7bf1cf322c92`](https://github.com/block/buzz/commit/dd222a509b156ba52ed3219e895d7bf1cf322c92) |
+| Commit timestamp          | `2026-07-26T07:57:31Z`                                                                                                      |
+| Relay crate version       | [`0.2.0`](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/crates/buzz-relay/Cargo.toml#L1-L7)   |
+| Published tag             | `ghcr.io/block/buzz:sha-dd222a5`                                                                                            |
+| Immutable image reference | `ghcr.io/block/buzz:sha-dd222a5@sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9`                    |
 
 Direct registry inspection returned this OCI index:
 
-| Platform | Runtime manifest digest |
-| --- | --- |
-| OCI index | `sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9` |
+| Platform      | Runtime manifest digest                                                   |
+| ------------- | ------------------------------------------------------------------------- |
+| OCI index     | `sha256:8cb0c4023a40acdd352dca8d922c193da4c9cea3beed484a62d8cfc03e9a93c9` |
 | `linux/amd64` | `sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152` |
 | `linux/arm64` | `sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7` |
 
@@ -30,24 +32,25 @@ runtime manifests carry
 ## Image runtime
 
 The [runtime Dockerfile](https://github.com/block/buzz/blob/dd222a509b156ba52ed3219e895d7bf1cf322c92/Dockerfile#L114-L159)
-creates `buzz:buzz` as UID/GID 1000, installs `curl`, copies the relay and admin
-binaries, exposes the three ports, selects `USER buzz:buzz`, and sets the relay
-entrypoint.
+creates `buzz:buzz` as UID/GID 1000, installs `curl`, copies the relay, pairing
+relay, and admin binaries, exposes the three ports, selects `USER buzz:buzz`,
+and sets the relay entrypoint.
 
 The following facts were also checked against each pulled platform manifest,
 not inferred only from the Dockerfile:
 
-| Check | `linux/amd64` | `linux/arm64` |
-| --- | --- | --- |
-| Config user | `buzz:buzz` | `buzz:buzz` |
-| `/etc/passwd` | `buzz:x:1000:1000::/var/lib/buzz:/usr/sbin/nologin` | same |
-| `/etc/group` | `buzz:x:1000:` | same |
-| Entrypoint | `/usr/local/bin/buzz-relay` | same |
-| Exposed TCP ports | `3000`, `8080`, `9102` | same |
-| `/bin/sh` | present (`sh -> dash`) | present (`sh -> dash`) |
-| `/usr/bin/curl` | present and executable | present and executable |
-| `/usr/local/bin/buzz-relay` | present and executable | present and executable |
-| `/usr/local/bin/buzz-admin` | present and executable | present and executable |
+| Check                            | `linux/amd64`                                       | `linux/arm64`          |
+| -------------------------------- | --------------------------------------------------- | ---------------------- |
+| Config user                      | `buzz:buzz`                                         | `buzz:buzz`            |
+| `/etc/passwd`                    | `buzz:x:1000:1000::/var/lib/buzz:/usr/sbin/nologin` | same                   |
+| `/etc/group`                     | `buzz:x:1000:`                                      | same                   |
+| Entrypoint                       | `/usr/local/bin/buzz-relay`                         | same                   |
+| Exposed TCP ports                | `3000`, `8080`, `9102`                              | same                   |
+| `/bin/sh`                        | present (`sh -> dash`)                              | present (`sh -> dash`) |
+| `/usr/bin/curl`                  | present and executable                              | present and executable |
+| `/usr/local/bin/buzz-relay`      | present and executable                              | present and executable |
+| `/usr/local/bin/buzz-admin`      | present and executable                              | present and executable |
+| `/usr/local/bin/buzz-pair-relay` | present and executable                              | present and executable |
 
 Port 3000 carries the HTTP/WebSocket application, port 8080 carries liveness
 and readiness, and port 9102 carries Prometheus metrics, as documented by the
@@ -84,17 +87,17 @@ all six commits, the complete changed-path set is limited to `desktop/`,
 selected commit, and new selected commit) prove the packaged runtime inputs
 are byte-identical:
 
-| Path | Object ID at all three revisions |
-| --- | --- |
-| `Dockerfile` | `661be6c3a7c7030d9684626da85dbccb297a040e` |
-| `crates/buzz-relay` | `70727caebcdabd871cdf2249f388b1748af9c327` |
-| `crates/buzz-admin` | `70754a537b83771bfc04b4960074952f970943e7` |
-| `crates/buzz-db` | `2b3fe5d171609b949a0782d4a303e9877fd537f7` |
-| `crates/buzz-media` | `e51b80482f890628c0cb33b487aa84594f0117de` |
-| `migrations` | `52c1e9b9e620a46a73916da151f0deb89f5440fc` |
-| `admin-web` | `c21ff0a3d302092d7aec717b77b76b5d85b1c9e0` |
-| `web` | `8ad007cf2fab3aed0de3405a56c4dac7f6fd4754` |
-| `deploy/compose` | `3e8179cfcc6199df04f3078700d893865a5aee66` |
+| Path                 | Object ID at all three revisions           |
+| -------------------- | ------------------------------------------ |
+| `Dockerfile`         | `661be6c3a7c7030d9684626da85dbccb297a040e` |
+| `crates/buzz-relay`  | `70727caebcdabd871cdf2249f388b1748af9c327` |
+| `crates/buzz-admin`  | `70754a537b83771bfc04b4960074952f970943e7` |
+| `crates/buzz-db`     | `2b3fe5d171609b949a0782d4a303e9877fd537f7` |
+| `crates/buzz-media`  | `e51b80482f890628c0cb33b487aa84594f0117de` |
+| `migrations`         | `52c1e9b9e620a46a73916da151f0deb89f5440fc` |
+| `admin-web`          | `c21ff0a3d302092d7aec717b77b76b5d85b1c9e0` |
+| `web`                | `8ad007cf2fab3aed0de3405a56c4dac7f6fd4754` |
+| `deploy/compose`     | `3e8179cfcc6199df04f3078700d893865a5aee66` |
 | `docker-compose.yml` | `0056ea6a4262d0efc92d3a4f23bd8b32ad310b12` |
 
 ## Admin CLI
@@ -307,10 +310,10 @@ docker pull --platform linux/arm64 ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83
 docker image inspect ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152
 docker image inspect ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7
 AMD64_FS_CONTAINER="$(docker create --platform linux/amd64 ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152)"
-docker export "$AMD64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin
+docker export "$AMD64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin usr/local/bin/buzz-pair-relay
 docker rm "$AMD64_FS_CONTAINER"
 ARM64_FS_CONTAINER="$(docker create --platform linux/arm64 ghcr.io/block/buzz@sha256:ff4d22c5cc747b61a83441bfdb4bd0a5902630b958e68be9976ea50e478bc6e7)"
-docker export "$ARM64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin
+docker export "$ARM64_FS_CONTAINER" | tar -tvf - bin usr/bin/sh usr/bin/dash usr/bin/curl usr/local/bin/buzz-relay usr/local/bin/buzz-admin usr/local/bin/buzz-pair-relay
 docker rm "$ARM64_FS_CONTAINER"
 docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/buzz-admin ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152 migrate --help
 docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/buzz-admin ghcr.io/block/buzz@sha256:a0a8049cd1349f997ea1108571df4af6f5cdc1af23ba1ae16aee95c37292c152 add-member --help

@@ -7,6 +7,7 @@ import {
   S3_BUCKET,
 } from '../constants.js'
 import { derivePublicConfig } from '../domain/public-url.js'
+import { normalizePairingRelayUrl } from '../domain/pairing-url.js'
 import type {
   RuntimeStateValidation,
   StateValidation,
@@ -85,6 +86,7 @@ export function buildRuntimeConfig(
   const gitHookHmacSecretHex = requireString(state, 'gitHookHmacSecretHex')
   const ownerPubkeyHex = requireString(state, 'ownerPubkeyHex')
   const primaryUrl = requireString(state, 'primaryUrl')
+  const pairingRelayUrl = requireString(state, 'pairingRelayUrl')
 
   let publicConfig
   try {
@@ -93,6 +95,14 @@ export function buildRuntimeConfig(
     invalidField('primaryUrl')
   }
   if (publicConfig.primaryUrl !== primaryUrl) invalidField('primaryUrl')
+
+  try {
+    if (normalizePairingRelayUrl(pairingRelayUrl) !== pairingRelayUrl) {
+      invalidField('pairingRelayUrl')
+    }
+  } catch {
+    invalidField('pairingRelayUrl')
+  }
 
   const databaseUrl = buildConnectionUrl({
     protocol: 'postgres',
@@ -127,6 +137,7 @@ export function buildRuntimeConfig(
       BUZZ_BIND_ADDR: `0.0.0.0:${BUZZ_PORT}`,
       BUZZ_HEALTH_PORT: String(BUZZ_HEALTH_PORT),
       BUZZ_METRICS_PORT: String(BUZZ_METRICS_PORT),
+      BUZZ_PAIRING_RELAY_URL: pairingRelayUrl,
       DATABASE_URL: databaseUrl,
       REDIS_URL: redisUrl,
       RELAY_URL: publicConfig.relayUrl,
@@ -138,6 +149,7 @@ export function buildRuntimeConfig(
       BUZZ_S3_BUCKET: S3_BUCKET,
       BUZZ_S3_REGION: 'us-east-1',
       BUZZ_S3_ADDRESSING_STYLE: 'path',
+      BUZZ_S3_FORCE_PATH_STYLE: 'true',
       BUZZ_DB_POOL_SIZE: '50',
       BUZZ_REPLICA_READ_MAX_AGE_MS: '0',
       BUZZ_GIT_REPO_PATH: '/data/git',

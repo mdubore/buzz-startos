@@ -45,6 +45,7 @@ const COMPLETE_STORE: CompleteStore = {
   ...VALID_SECRETS,
   ownerPubkeyHex: '11'.repeat(32),
   primaryUrl: 'https://buzz.example',
+  pairingRelayUrl: 'wss://pair.buzz.example',
   lastMembershipMutationUnixSecond: 42,
 }
 
@@ -156,6 +157,29 @@ test('a fully valid record returns normalized ready state', () => {
     kind: 'ready',
     state: COMPLETE_STORE,
   })
+})
+
+test('pairing relay URL is optional for backward compatibility', () => {
+  const withoutPairingUrl = { ...COMPLETE_STORE }
+  delete withoutPairingUrl.pairingRelayUrl
+
+  assert.deepEqual(validateStoredState(parsed(withoutPairingUrl)), {
+    kind: 'ready',
+    state: withoutPairingUrl,
+  })
+})
+
+test('present pairing relay URL must already use canonical WebSocket form', () => {
+  for (const pairingRelayUrl of [
+    'wss://PAIR.BUZZ.EXAMPLE/',
+    'https://pair.buzz.example',
+    'wss://pair.buzz.example/path',
+    null,
+  ]) {
+    assertRecovery(parsed({ ...COMPLETE_STORE, pairingRelayUrl }), [
+      'pairingRelayUrl',
+    ])
+  }
 })
 
 test('valid stable secrets with either setup field absent need setup', () => {
@@ -291,6 +315,7 @@ test('validation aggregates fixed field-name-only issues without values', () => 
     'hook-sensitive-value',
     'owner-sensitive-value',
     'url-sensitive-value',
+    'pairing-sensitive-value',
     'timestamp-sensitive-value',
   ]
   const issues = assertRecovery(
@@ -304,7 +329,8 @@ test('validation aggregates fixed field-name-only issues without values', () => 
       gitHookHmacSecretHex: rawValues[6],
       ownerPubkeyHex: rawValues[7],
       primaryUrl: rawValues[8],
-      lastMembershipMutationUnixSecond: rawValues[9],
+      pairingRelayUrl: rawValues[9],
+      lastMembershipMutationUnixSecond: rawValues[10],
     }),
     [
       'schemaVersion',
@@ -316,6 +342,7 @@ test('validation aggregates fixed field-name-only issues without values', () => 
       'gitHookHmacSecretHex',
       'ownerPubkeyHex',
       'primaryUrl',
+      'pairingRelayUrl',
       'lastMembershipMutationUnixSecond',
     ],
   )

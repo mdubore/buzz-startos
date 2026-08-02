@@ -23,6 +23,7 @@ const COMPLETE_STORE: CompleteStore = {
   gitHookHmacSecretHex: 'ab'.repeat(32),
   ownerPubkeyHex: '11'.repeat(32),
   primaryUrl: 'https://buzz.example',
+  pairingRelayUrl: 'wss://pair.buzz.example',
   lastMembershipMutationUnixSecond: 42,
 }
 
@@ -36,6 +37,7 @@ const REQUIRED_FIELDS = [
   'gitHookHmacSecretHex',
   'ownerPubkeyHex',
   'primaryUrl',
+  'pairingRelayUrl',
 ] as const
 
 function validatedReady(): Extract<StateValidation, { kind: 'ready' }> {
@@ -70,6 +72,7 @@ const EXPECTED_CONFIG = {
     BUZZ_BIND_ADDR: '0.0.0.0:3000',
     BUZZ_HEALTH_PORT: '8080',
     BUZZ_METRICS_PORT: '9102',
+    BUZZ_PAIRING_RELAY_URL: 'wss://pair.buzz.example',
     DATABASE_URL: `postgres://buzz:${COMPLETE_STORE.postgresPassword}@127.0.0.1:5432/buzz`,
     REDIS_URL: `redis://:${COMPLETE_STORE.redisPassword}@127.0.0.1:6379`,
     RELAY_URL: 'wss://buzz.example',
@@ -81,6 +84,7 @@ const EXPECTED_CONFIG = {
     BUZZ_S3_BUCKET: 'buzz-media',
     BUZZ_S3_REGION: 'us-east-1',
     BUZZ_S3_ADDRESSING_STYLE: 'path',
+    BUZZ_S3_FORCE_PATH_STYLE: 'true',
     BUZZ_DB_POOL_SIZE: '50',
     BUZZ_REPLICA_READ_MAX_AGE_MS: '0',
     BUZZ_GIT_REPO_PATH: '/data/git',
@@ -268,5 +272,20 @@ test('sanitizes malformed canonical URL errors at the config boundary', () => {
       assert.equal(error.message.includes(secret), false)
       return true
     },
+  )
+})
+
+test('rejects a missing pairing relay URL at the config boundary', () => {
+  const ready = validatedReady()
+  const state = { ...ready.state }
+  delete state.pairingRelayUrl
+
+  assert.throws(
+    () =>
+      buildRuntimeConfig({
+        kind: 'ready',
+        state,
+      }),
+    new Error('Cannot build Buzz runtime config: invalid pairingRelayUrl'),
   )
 })

@@ -1,6 +1,7 @@
 import { sdk } from '../sdk'
 import { addMember } from './add-member'
 import { completeInitialSetup } from './complete-initial-setup'
+import { configurePairingRelay } from './configure-pairing-relay'
 import { connectionInformation } from './connection-information'
 import { listMembersAction } from './list-members'
 import { removeMember } from './remove-member'
@@ -13,5 +14,6 @@ export const actions = sdk.Actions.of()
   .addAction(removeMember)
   .addAction(listMembersAction)
   .addAction(completeInitialSetup)
+  .addAction(configurePairingRelay)
   .addAction(verifyStableState)
   .addAction(verifyCanonicalUrl)

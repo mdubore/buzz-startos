@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-import { IMPOSSIBLE } from '@start9labs/start-sdk'
+import { ExtendedVersion, IMPOSSIBLE } from '@start9labs/start-sdk'
 
 import defaultDict from '../startos/i18n/dictionaries/default.js'
 import translations from '../startos/i18n/dictionaries/translations.js'
-import { IMAGE_PINS, packedImageReference } from '../startos/image-pins.js'
+import {
+  IMAGE_PINS,
+  UPSTREAM,
+  packedImageReference,
+} from '../startos/image-pins.js'
 import { manifest } from '../startos/manifest/index.js'
 import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
-const VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1'
+const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1'
+const VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -18,6 +24,53 @@ const PLACEHOLDER = new RegExp(
     '|',
   )})\\}\\}`,
 )
+
+const forbiddenDocumentationClaims = [
+  {
+    name: 'manual /pair URL instructions',
+    pattern:
+      /\b(?:(?:append|add)\s+`?\/pair`?\s+to\s+(?:the\s+)?(?:pairing|main)(?: relay)? URL|(?:select|choose|configure)\s+`?\/pair`?(?:\s+manually)?\s+(?:for|on|as)\s+(?:the\s+)?(?:pairing|main)(?: relay)? URL|(?:set|select|choose|configure)\s+(?:the\s+)?(?:pairing|main)(?: relay)? URL\s+(?:to|as)\s+`?\/pair`?)/i,
+    examples: [
+      'Add `/pair` to the main relay URL.',
+      'Append /pair to the pairing relay URL.',
+      'Select `/pair` manually for the pairing relay URL.',
+      'Configure /pair on the main relay URL.',
+      'Choose `/pair` for the pairing relay URL.',
+      'Set the main relay URL to `/pair`.',
+      'Configure the pairing relay URL as `/pair`.',
+    ],
+  },
+  {
+    name: 'positive remote mobile claims',
+    pattern:
+      /(?:remote (?:mobile|Android)(?: (?:use|pairing))?|(?:mobile|Android)(?: (?:use|pairing))? away from (?:the |your )?home network)\s+(?:is\s+)?(?:currently\s+)?(?:enabled|available|ready|supported|verified|working|works)/i,
+    examples: [
+      'Remote mobile use is supported.',
+      'Remote Android pairing is enabled.',
+      'Remote Android pairing is available.',
+      'Remote Android pairing is ready.',
+      'Remote Android pairing is currently available.',
+    ],
+  },
+  {
+    name: 'positive unmodified Android claims',
+    pattern:
+      /unmodified Android(?: application| app)?\s+(?:is|has been)\s+(?:verified|supported)|supports? (?:the )?unmodified Android/i,
+    examples: [
+      'The unmodified Android application is verified.',
+      'This setup supports unmodified Android.',
+    ],
+  },
+  {
+    name: 'required long-term mobile modifications',
+    pattern:
+      /(?:must|required to|needs? to)\s+(?:be\s+)?(?:modify|patch|change)[a-z]*.{0,30}(?:Android|mobile)|(?:Android|mobile).{0,30}(?:(?:modification|patch).{0,20}(?:is|required|needed)|must\s+be\s+(?:modified|patched|changed)).{0,20}(?:long[- ]term|permanent)/i,
+    examples: [
+      'You must modify the mobile app permanently.',
+      'Android app modification is required long-term.',
+    ],
+  },
+] as const
 
 const expectedImages = {
   buzz: {
@@ -73,9 +126,11 @@ test('packs every runtime image from its immutable verified pin', () => {
   }
 })
 
-test('uses the audited upstream-main snapshot as the initial package version', () => {
+test('uses the audited 63496cc snapshot as the current package version', () => {
   assert.equal(current.options.version, VERSION)
   assert.equal(versionGraph.currentVersion().toString(), VERSION)
+  assert.equal(UPSTREAM.commit, '63496cc1d4c6f1b7c613801bdcc694169dcf391a')
+  assert.equal(UPSTREAM.shortCommit, '63496cc')
   assert.deepEqual(Object.keys(current.options.releaseNotes).sort(), [
     'de_DE',
     'en_US',
@@ -85,6 +140,22 @@ test('uses the audited upstream-main snapshot as the initial package version', (
   ])
   assert.equal(typeof current.options.migrations.up, 'function')
   assert.equal(current.options.migrations.down, IMPOSSIBLE)
+  assert.equal(typeof current.options.releaseNotes, 'object')
+  if (typeof current.options.releaseNotes === 'string') {
+    throw new Error('release notes must be localized')
+  }
+  assert.match(current.options.releaseNotes.en_US, /dedicated.*pairing relay/i)
+  assert.match(current.options.releaseNotes.en_US, /LAN-only/i)
+  assert.match(current.options.releaseNotes.en_US, /does not enable remote/i)
+})
+
+test('upgrades from the previously sideloaded 63496cc revision', () => {
+  const previous = ExtendedVersion.parse(PREVIOUS_VERSION)
+  const next = versionGraph.currentVersion()
+
+  assert.equal(previous.compareForSort(next) < 0, true)
+  assert.equal(previous.satisfies(versionGraph.canMigrateFrom()), true)
+  assert.equal(next.satisfies(versionGraph.canMigrateTo()), true)
 })
 
 test('localizes package descriptions without scaffold placeholders', () => {
@@ -154,9 +225,9 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Verify Canonical URL',
     'Verify that the original immutable StartOS address is available after a restore or gateway change.',
     'Connection Information',
-    'Show the canonical addresses and owner public key used by external Buzz clients.',
+    'Show the canonical, relay, and pairing addresses and owner public key used by external Buzz clients.',
     'Buzz Connection Information',
-    'Use these values in the Buzz desktop client; mobile clients are still under development, and the StartOS interface does not provide the full Buzz experience.',
+    'Normal mobile traffic uses the main relay. Use the pairing relay only when adding a device. The current verified beta configuration is LAN-only.',
     'Owner Public Key (Hex)',
     'Buzz stored state requires recovery. Restore a known-good StartOS backup or reset and reinstall Buzz.',
     'Complete initial setup before starting Buzz.',
@@ -178,6 +249,16 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
     'Member Removed',
     'Normalized Nostr Public Key',
     'Relay Members',
+    'Buzz Pairing Relay',
+    'Ephemeral WebSocket endpoint for pairing Buzz devices.',
+    'Pairing Relay WebSocket URL',
+    'Select the StartOS WebSocket address Buzz will advertise for device pairing.',
+    'Configure Pairing Relay',
+    'Select the current StartOS WebSocket address used to pair Buzz devices.',
+    'Pairing Relay Configured',
+    'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.',
+    'Buzz Pairing Relay is ready',
+    'Buzz Pairing Relay is not ready',
   ] as const
 
   assert.deepEqual(Object.keys(defaultDict), requiredKeys)
@@ -206,7 +287,7 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
 
   assert.equal(
     translations.es_ES[19],
-    'Usa estos valores en el cliente de escritorio de Buzz; los clientes móviles aún están en desarrollo y la interfaz de StartOS no ofrece la experiencia completa de Buzz.',
+    'El tráfico móvil normal usa el relay principal. Usa el relay de emparejamiento solo al añadir un dispositivo. La configuración beta verificada actual funciona solo en la red local.',
   )
   assert.equal(
     translations.de_DE[13],
@@ -214,11 +295,11 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
   )
   assert.equal(
     translations.de_DE[17],
-    'Zeigt die kanonischen Adressen und den öffentlichen Schlüssel des Eigentümers für externe Buzz-Clients.',
+    'Zeigt die kanonische Adresse, die Relay- und Kopplungsadressen sowie den öffentlichen Schlüssel des Eigentümers für externe Buzz-Clients.',
   )
   assert.equal(
     translations.de_DE[19],
-    'Verwende diese Werte im Buzz-Desktop-Client; die Mobil-Clients befinden sich noch in Entwicklung, und die StartOS-Schnittstelle bietet nicht das vollständige Buzz-Erlebnis.',
+    'Normaler mobiler Datenverkehr nutzt das Haupt-Relay. Verwenden Sie das Kopplungs-Relay nur beim Hinzufügen eines Geräts. Die derzeit verifizierte Beta-Konfiguration funktioniert nur im lokalen Netzwerk.',
   )
   assert.equal(
     translations.de_DE[20],
@@ -230,10 +311,110 @@ test('prepares localized UI strings for setup, recovery, access, and health', ()
   )
   assert.equal(
     translations.pl_PL[19],
-    'Użyj tych wartości w komputerowym kliencie Buzz; klienty mobilne są nadal w fazie rozwoju, a interfejs StartOS nie zapewnia pełnych możliwości Buzz.',
+    'Zwykły ruch mobilny korzysta z głównego przekaźnika. Przekaźnika parowania używaj tylko podczas dodawania urządzenia. Obecnie zweryfikowana konfiguracja beta działa wyłącznie w sieci lokalnej.',
   )
   assert.equal(
     translations.fr_FR[19],
-    'Utilisez ces valeurs dans le client Buzz de bureau ; les clients mobiles sont encore en cours de développement et l’interface StartOS ne fournit pas l’expérience Buzz complète.',
+    'Le trafic mobile normal utilise le relais principal. Utilisez le relais d’appairage uniquement lors de l’ajout d’un appareil. La configuration bêta actuellement vérifiée fonctionne uniquement sur le réseau local.',
   )
+})
+
+for (const forbiddenClaim of forbiddenDocumentationClaims) {
+  test(`detects ${forbiddenClaim.name}`, () => {
+    for (const example of forbiddenClaim.examples) {
+      assert.match(
+        example,
+        forbiddenClaim.pattern,
+        `${forbiddenClaim.name} detector missed: ${example}`,
+      )
+    }
+  })
+}
+
+test('documents the LAN-only mobile pairing beta boundary', async () => {
+  const documents = await Promise.all(
+    ['README.md', 'instructions.md'].map((path) => readFile(path, 'utf8')),
+  )
+
+  for (const document of documents) {
+    const normalized = document.replace(/\s+/g, ' ')
+
+    assert.match(normalized, /LAN-only/i)
+    assert.match(normalized, /does not (?:enable|provide).*remote access/i)
+    assert.match(normalized, /main(?: Buzz)? relay.*\/pair.*404/is)
+    assert.match(
+      normalized,
+      /pairing_relay_url.*dedicated root|dedicated root.*NIP-11/is,
+    )
+    assert.match(normalized, /Android.*TLS|TLS.*Android/is)
+    assert.match(normalized, /StartTunnel.*future|future.*StartTunnel/is)
+    assert.match(
+      normalized,
+      /without (?:a )?Buzz client modification|requires no Buzz client modification/i,
+    )
+    for (const forbiddenClaim of forbiddenDocumentationClaims) {
+      assert.doesNotMatch(
+        normalized,
+        forbiddenClaim.pattern,
+        `documentation contains ${forbiddenClaim.name}`,
+      )
+    }
+  }
+
+  assert.match(documents[0], /BUZZ_PAIRING_RELAY_URL/)
+  assert.match(documents[0], /internal port\s+`5000`/i)
+  assert.match(documents[1], /mdubore\/buzz9/)
+  assert.match(documents[1], /78a155f92/)
+  assert.match(documents[1], /b953803bc/)
+  assert.match(documents[1], /4ac56fce1/)
+})
+
+test('documents current 63496cc provenance and historical dd222a5 scope', async () => {
+  const [readme, updating, currentContract, historicalContract] =
+    await Promise.all(
+      [
+        'README.md',
+        'UPDATING.md',
+        'docs/upstream/63496cc-runtime-contract.md',
+        'docs/upstream/dd222a5-runtime-contract.md',
+      ].map((path) => readFile(path, 'utf8')),
+    )
+
+  for (const document of [readme, updating, currentContract]) {
+    assert.match(document, new RegExp(VERSION.replaceAll('.', '\\.')))
+    assert.match(document, /63496cc/i)
+    assert.match(document, /00ecf2c/i)
+  }
+
+  for (const document of [updating, currentContract]) {
+    assert.match(document, new RegExp(IMAGE_PINS.buzz.indexDigest))
+    assert.match(document, new RegExp(IMAGE_PINS.buzz.platforms.amd64))
+    assert.match(document, new RegExp(IMAGE_PINS.buzz.platforms.arm64))
+  }
+
+  const provenanceDocumentation = `${readme}\n${updating}`
+  assert.match(readme, /downstream companion-client fork/i)
+  assert.match(readme, /official `block\/buzz` image pins/i)
+  assert.match(updating, /Prepare A Reviewed Companion-Fork Update/i)
+  assert.match(updating, /git switch -c .* origin\/main/i)
+  assert.match(updating, /rev-parse upstream\/main/i)
+  assert.match(updating, /historical image was blocked/i)
+  assert.match(updating, /not evidence for the current\s+`63496cc:2` package/i)
+  assert.doesNotMatch(
+    provenanceDocumentation,
+    /clean, fast-forward-only mirror|existing Buzz image|newer candidate/i,
+  )
+
+  assert.match(currentContract, /buzz-pair-relay.*present and executable/is)
+  assert.match(currentContract, /BUZZ_PAIRING_RELAY_URL/)
+  assert.match(currentContract, /pairing_relay_url/)
+  assert.match(currentContract, /prepare-git-cache.*no dependency edges/is)
+  assert.match(
+    currentContract,
+    /migrate.*(?:waits for|requires).*PostgreSQL.*create-bucket.*prepare-git-cache/is,
+  )
+  assert.match(currentContract, /BUZZ_S3_ADDRESSING_STYLE=path/)
+  assert.match(currentContract, /BUZZ_S3_FORCE_PATH_STYLE=true/)
+  assert.match(historicalContract, /Historical status: superseded/i)
+  assert.match(historicalContract, /does not describe the current/i)
 })

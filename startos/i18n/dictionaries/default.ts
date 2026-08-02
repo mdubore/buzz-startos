@@ -18,9 +18,9 @@ const dict = {
   'Verify Canonical URL': 14,
   'Verify that the original immutable StartOS address is available after a restore or gateway change.': 15,
   'Connection Information': 16,
-  'Show the canonical addresses and owner public key used by external Buzz clients.': 17,
+  'Show the canonical, relay, and pairing addresses and owner public key used by external Buzz clients.': 17,
   'Buzz Connection Information': 18,
-  'Use these values in the Buzz desktop client; mobile clients are still under development, and the StartOS interface does not provide the full Buzz experience.': 19,
+  'Normal mobile traffic uses the main relay. Use the pairing relay only when adding a device. The current verified beta configuration is LAN-only.': 19,
   'Owner Public Key (Hex)': 20,
   'Buzz stored state requires recovery. Restore a known-good StartOS backup or reset and reinstall Buzz.': 21,
   'Complete initial setup before starting Buzz.': 22,
@@ -42,6 +42,16 @@ const dict = {
   'Member Removed': 38,
   'Normalized Nostr Public Key': 39,
   'Relay Members': 40,
+  'Buzz Pairing Relay': 41,
+  'Ephemeral WebSocket endpoint for pairing Buzz devices.': 42,
+  'Pairing Relay WebSocket URL': 43,
+  'Select the StartOS WebSocket address Buzz will advertise for device pairing.': 44,
+  'Configure Pairing Relay': 45,
+  'Select the current StartOS WebSocket address used to pair Buzz devices.': 46,
+  'Pairing Relay Configured': 47,
+  'Select a WebSocket address currently available on the Buzz pairing interface before starting Buzz.': 48,
+  'Buzz Pairing Relay is ready': 49,
+  'Buzz Pairing Relay is not ready': 50,
 } as const
 
 /**
