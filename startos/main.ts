@@ -265,7 +265,7 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
     .addOneshot('prepare-git-cache', {
       subcontainer: buzzSub,
       exec: {
-        command: ['chown', 'buzz:buzz', '/data/git'],
+        command: ['chown', '-R', 'buzz:buzz', '/data/git'],
         user: 'root',
       },
       requires: [],

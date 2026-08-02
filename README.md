@@ -234,18 +234,18 @@ regenerated.
 
 ## Health And Startup
 
-Startup is ordered:
+Startup uses parallel branches that converge before Buzz starts:
 
-1. Start PostgreSQL, Redis, and MinIO and wait for their private readiness
-   checks.
-2. Create the MinIO bucket idempotently and keep anonymous bucket access
-   disabled.
-3. Prepare the disposable `git-cache` directory for the upstream unprivileged
-   `buzz` account using a root-only one-shot command.
-4. Run `buzz-admin migrate` with only the database environment.
-5. Start Buzz with automatic migrations disabled.
-6. Let Buzz run its S3 conditional-write conformance probe.
-7. Report the user-facing **Buzz Relay** health check only when Buzz readiness
+1. Start PostgreSQL, Redis, and MinIO independently while a root-only one-shot
+   prepares the disposable `git-cache` for the unprivileged `buzz` account.
+2. After MinIO is ready, create its bucket idempotently and keep anonymous
+   bucket access disabled.
+3. Run `buzz-admin migrate` after PostgreSQL, bucket creation, and Git-cache
+   preparation are ready.
+4. Start Buzz with automatic migrations disabled after all three stores and
+   the preceding one-shots are ready.
+5. Let Buzz run its S3 conditional-write conformance probe.
+6. Report the user-facing **Buzz Relay** health check only when Buzz readiness
    and MinIO liveness both succeed.
 
 PostgreSQL uses `pg_isready`, Redis requires an authenticated `PONG`, and MinIO

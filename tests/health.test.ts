@@ -281,7 +281,7 @@ test('native stack records the exact lazy subcontainers and dependency order', (
         imageId: 'buzz',
         name: 'buzz',
         mounts: buildBuzzMounts().build(),
-        command: ['chown', 'buzz:buzz', '/data/git'],
+        command: ['chown', '-R', 'buzz:buzz', '/data/git'],
         env: null,
         display: null,
         gracePeriod: null,
