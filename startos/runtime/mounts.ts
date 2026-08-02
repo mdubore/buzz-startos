@@ -1,7 +1,7 @@
 import { sdk } from '../sdk.js'
 
 // These exact sidecar pins enter as root and initialize or write without idmaps.
-// Buzz is UID/GID 1000, so its StartOS-root-owned cache needs the map below.
+// Volume ownership for the unprivileged Buzz process is prepared in main.
 // Reverify pinned metadata and real writes before release or any pin change.
 export const buildPostgresMounts = () =>
   sdk.Mounts.of().mountVolume({
@@ -33,5 +33,4 @@ export const buildBuzzMounts = () =>
     subpath: null,
     mountpoint: '/data/git',
     readonly: false,
-    idmap: [{ fromId: 0, toId: 1000 }],
   })

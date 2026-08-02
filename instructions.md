@@ -64,6 +64,10 @@ preserve the database, object storage, wrapper state, Redis continuity data,
 canonical URL, owner identity, and stable service secrets, but this behavior
 has not yet been proven by a restore on a real StartOS device.
 
+During startup, the package prepares the disposable Git cache for the
+unprivileged Buzz account before running migrations. This supports
+overlay-backed Server Pure installations without running the relay as root.
+
 Before updating the published `:2` revision, complete
 [`PRE_UPGRADE_AUDIT.md`][pre-upgrade-audit]. It requires a
 verified backup and clean-target restore, and confirmation that an active owner

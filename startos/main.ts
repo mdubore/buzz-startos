@@ -262,6 +262,14 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
       },
       requires: ['minio'],
     })
+    .addOneshot('prepare-git-cache', {
+      subcontainer: buzzSub,
+      exec: {
+        command: ['chown', 'buzz:buzz', '/data/git'],
+        user: 'root',
+      },
+      requires: [],
+    })
     .addOneshot('migrate', {
       subcontainer: buzzSub,
       exec: {
@@ -270,7 +278,7 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
           DATABASE_URL: config.buzzEnv.DATABASE_URL,
         },
       },
-      requires: ['postgres', 'create-bucket'],
+      requires: ['postgres', 'create-bucket', 'prepare-git-cache'],
     })
     .addDaemon('buzz', {
       subcontainer: buzzSub,
@@ -286,7 +294,14 @@ export function buildNativeStack(effects: T.Effects, config: RuntimeConfig) {
           ),
         gracePeriod: 180_000,
       },
-      requires: ['postgres', 'redis', 'minio', 'create-bucket', 'migrate'],
+      requires: [
+        'postgres',
+        'redis',
+        'minio',
+        'create-bucket',
+        'prepare-git-cache',
+        'migrate',
+      ],
     })
 }
 

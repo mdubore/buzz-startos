@@ -83,7 +83,7 @@ test('MinIO dependency readiness stays separate from ongoing liveness', async ()
   assert.equal(checkedUrls.includes(MINIO_READINESS_URL), false)
 })
 
-test('stateful service mounts use the exact volume paths and ID maps', () => {
+test('stateful service mounts use overlay-compatible volume mappings', () => {
   assert.deepEqual(buildPostgresMounts().build(), [
     {
       mountpoint: '/var/lib/postgresql',
@@ -132,7 +132,7 @@ test('stateful service mounts use the exact volume paths and ID maps', () => {
         subpath: null,
         readonly: false,
         filetype: 'directory',
-        idmap: [{ fromId: 0, toId: 1000, range: 1 }],
+        idmap: [],
       },
     },
   ])
@@ -276,8 +276,20 @@ test('native stack records the exact lazy subcontainers and dependency order', (
       },
       {
         kind: 'oneshot',
+        id: 'prepare-git-cache',
+        requires: [],
+        imageId: 'buzz',
+        name: 'buzz',
+        mounts: buildBuzzMounts().build(),
+        command: ['chown', 'buzz:buzz', '/data/git'],
+        env: null,
+        display: null,
+        gracePeriod: null,
+      },
+      {
+        kind: 'oneshot',
         id: 'migrate',
-        requires: ['postgres', 'create-bucket'],
+        requires: ['postgres', 'create-bucket', 'prepare-git-cache'],
         imageId: 'buzz',
         name: 'buzz',
         mounts: buildBuzzMounts().build(),
@@ -291,7 +303,14 @@ test('native stack records the exact lazy subcontainers and dependency order', (
       {
         kind: 'daemon',
         id: 'buzz',
-        requires: ['postgres', 'redis', 'minio', 'create-bucket', 'migrate'],
+        requires: [
+          'postgres',
+          'redis',
+          'minio',
+          'create-bucket',
+          'prepare-git-cache',
+          'migrate',
+        ],
         imageId: 'buzz',
         name: 'buzz',
         mounts: buildBuzzMounts().build(),
@@ -303,11 +322,22 @@ test('native stack records the exact lazy subcontainers and dependency order', (
     ],
   )
 
-  const migrate = stack.entries[4]
-  const buzz = stack.entries[5]
+  const prepareGitCache = stack.entries[4]
+  assert.equal(prepareGitCache.kind, 'oneshot')
+  if (prepareGitCache.kind !== 'oneshot' || !('user' in prepareGitCache.exec)) {
+    throw new Error('prepare-git-cache must be a command oneshot')
+  }
+  assert.equal(prepareGitCache.exec.user, 'root')
+
+  const migrate = stack.entries[5]
+  const buzz = stack.entries[6]
   assert.ok('subcontainer' in migrate)
   assert.ok('subcontainer' in buzz)
   assert.equal(migrate.subcontainer?.identity, buzz.subcontainer?.identity)
+  assert.equal(
+    prepareGitCache.subcontainer?.identity,
+    buzz.subcontainer?.identity,
+  )
 })
 
 test('bucket creation uses sequential secret-free argv with scoped encoded env', async () => {

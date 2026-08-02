@@ -240,15 +240,21 @@ Startup is ordered:
    checks.
 2. Create the MinIO bucket idempotently and keep anonymous bucket access
    disabled.
-3. Run `buzz-admin migrate` with only the database environment.
-4. Start Buzz with automatic migrations disabled.
-5. Let Buzz run its S3 conditional-write conformance probe.
-6. Report the user-facing **Buzz Relay** health check only when Buzz readiness
+3. Prepare the disposable `git-cache` directory for the upstream unprivileged
+   `buzz` account using a root-only one-shot command.
+4. Run `buzz-admin migrate` with only the database environment.
+5. Start Buzz with automatic migrations disabled.
+6. Let Buzz run its S3 conditional-write conformance probe.
+7. Report the user-facing **Buzz Relay** health check only when Buzz readiness
    and MinIO liveness both succeed.
 
 PostgreSQL uses `pg_isready`, Redis requires an authenticated `PONG`, and MinIO
 uses its liveness endpoint. A sidecar, bucket, migration, S3 conformance, relay,
 or later MinIO failure prevents a healthy service state.
+
+The Git cache uses a regular StartOS volume mount. This avoids relying on
+ID-mapped mounts that are unavailable when Server Pure stores StartOS data on
+an overlay filesystem; the Buzz relay itself remains unprivileged.
 
 ## Security And Limitations
 

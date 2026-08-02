@@ -10,7 +10,7 @@ import { manifest } from '../startos/manifest/index.js'
 import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
-const VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:0'
+const VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
