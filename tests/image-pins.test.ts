@@ -10,23 +10,26 @@ import {
 const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/
 
 test('pins the complete runtime image set by immutable OCI digest', () => {
-  assert.equal(UPSTREAM.commit, '63496cc1d4c6f1b7c613801bdcc694169dcf391a')
+  assert.equal(UPSTREAM.commit, '651f6372754e60e3f936b3397040eb0f1e44c9f3')
+  assert.equal(UPSTREAM.shortCommit, '651f637')
   assert.equal(UPSTREAM.shortCommit, UPSTREAM.commit.slice(0, 7))
+  assert.equal(UPSTREAM.committedAt, '2026-08-03T17:33:19Z')
+  assert.equal(UPSTREAM.relayVersion, '0.2.0')
   assert.equal(
     IMAGE_PINS.buzz.tagReference,
     `ghcr.io/block/buzz:sha-${UPSTREAM.shortCommit}`,
   )
   assert.equal(
     IMAGE_PINS.buzz.indexDigest,
-    'sha256:9de8aff13af33f3b17659e6eacda024b3070efda911c5e08d4d85a6c01c4deb6',
+    'sha256:3f8d3ff503dc735e5578e68194b1dbf543e6e792ae1c7e906c735ee269d2841c',
   )
   assert.equal(
     IMAGE_PINS.buzz.platforms.amd64,
-    'sha256:5ac4697562230d32de4473d2eaf2eab098300c8aae1721e6bd4bf00b2956a5bf',
+    'sha256:e47c31ff9bdd0359e25b9115e69c4a46c1f9cf3c508295d5a020fee6a8f40632',
   )
   assert.equal(
     IMAGE_PINS.buzz.platforms.arm64,
-    'sha256:414d8e183f3ccd45eb228cfdb1d6d88da463dd7440bc726c500abd435d0e7c3c',
+    'sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688',
   )
   assert.deepEqual(Object.keys(IMAGE_PINS).sort(), [
     'buzz',

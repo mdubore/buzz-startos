@@ -15,8 +15,8 @@ import { manifest } from '../startos/manifest/index.js'
 import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
-const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1'
-const VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
+const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
+const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -126,11 +126,13 @@ test('packs every runtime image from its immutable verified pin', () => {
   }
 })
 
-test('uses the audited 63496cc snapshot as the current package version', () => {
+test('uses the audited 651f637 snapshot as the current package version', () => {
   assert.equal(current.options.version, VERSION)
   assert.equal(versionGraph.currentVersion().toString(), VERSION)
-  assert.equal(UPSTREAM.commit, '63496cc1d4c6f1b7c613801bdcc694169dcf391a')
-  assert.equal(UPSTREAM.shortCommit, '63496cc')
+  assert.equal(UPSTREAM.commit, '651f6372754e60e3f936b3397040eb0f1e44c9f3')
+  assert.equal(UPSTREAM.shortCommit, '651f637')
+  assert.equal(UPSTREAM.committedAt, '2026-08-03T17:33:19Z')
+  assert.equal(UPSTREAM.relayVersion, '0.2.0')
   assert.deepEqual(Object.keys(current.options.releaseNotes).sort(), [
     'de_DE',
     'en_US',
@@ -144,12 +146,22 @@ test('uses the audited 63496cc snapshot as the current package version', () => {
   if (typeof current.options.releaseNotes === 'string') {
     throw new Error('release notes must be localized')
   }
+  assert.match(current.options.releaseNotes.en_US, /Desktop v0\.5\.4/i)
+  assert.match(current.options.releaseNotes.en_US, /NIP-11/i)
+  assert.match(current.options.releaseNotes.en_US, /Git/i)
+  assert.match(current.options.releaseNotes.en_US, /security/i)
   assert.match(current.options.releaseNotes.en_US, /dedicated.*pairing relay/i)
   assert.match(current.options.releaseNotes.en_US, /LAN-only/i)
   assert.match(current.options.releaseNotes.en_US, /does not enable remote/i)
+  for (const releaseNote of Object.values(current.options.releaseNotes)) {
+    assert.match(
+      releaseNote,
+      /https:\/\/github\.com\/block\/buzz\/releases\/tag\/desktop-v0\.5\.4/,
+    )
+  }
 })
 
-test('upgrades from the previously sideloaded 63496cc revision', () => {
+test('upgrades from the published local 63496cc:2 package', () => {
   const previous = ExtendedVersion.parse(PREVIOUS_VERSION)
   const next = versionGraph.currentVersion()
 
@@ -369,28 +381,32 @@ test('documents the LAN-only mobile pairing beta boundary', async () => {
   assert.match(documents[1], /4ac56fce1/)
 })
 
-test('documents current 63496cc provenance and historical dd222a5 scope', async () => {
-  const [readme, updating, currentContract, historicalContract] =
-    await Promise.all(
-      [
-        'README.md',
-        'UPDATING.md',
-        'docs/upstream/63496cc-runtime-contract.md',
-        'docs/upstream/dd222a5-runtime-contract.md',
-      ].map((path) => readFile(path, 'utf8')),
-    )
+test('documents audited 651f637 provenance and historical snapshot scope', async () => {
+  const [
+    readme,
+    updating,
+    currentContract,
+    previousContract,
+    historicalContract,
+  ] = await Promise.all(
+    [
+      'README.md',
+      'UPDATING.md',
+      'docs/upstream/651f637-runtime-contract.md',
+      'docs/upstream/63496cc-runtime-contract.md',
+      'docs/upstream/dd222a5-runtime-contract.md',
+    ].map((path) => readFile(path, 'utf8')),
+  )
 
-  for (const document of [readme, updating, currentContract]) {
-    assert.match(document, new RegExp(VERSION.replaceAll('.', '\\.')))
-    assert.match(document, /63496cc/i)
-    assert.match(document, /00ecf2c/i)
-  }
-
-  for (const document of [updating, currentContract]) {
-    assert.match(document, new RegExp(IMAGE_PINS.buzz.indexDigest))
-    assert.match(document, new RegExp(IMAGE_PINS.buzz.platforms.amd64))
-    assert.match(document, new RegExp(IMAGE_PINS.buzz.platforms.arm64))
-  }
+  assert.match(currentContract, new RegExp(UPSTREAM.commit))
+  assert.match(currentContract, /desktop-v0\.5\.4/i)
+  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.indexDigest))
+  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.platforms.amd64))
+  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.platforms.arm64))
+  assert.match(updating, new RegExp(UPSTREAM.commit))
+  assert.match(updating, /desktop-v0\.5\.4/i)
+  assert.match(previousContract, /63496cc/i)
+  assert.match(previousContract, /00ecf2c/i)
 
   const provenanceDocumentation = `${readme}\n${updating}`
   assert.match(readme, /downstream companion-client fork/i)
@@ -405,16 +421,21 @@ test('documents current 63496cc provenance and historical dd222a5 scope', async 
     /clean, fast-forward-only mirror|existing Buzz image|newer candidate/i,
   )
 
-  assert.match(currentContract, /buzz-pair-relay.*present and executable/is)
-  assert.match(currentContract, /BUZZ_PAIRING_RELAY_URL/)
-  assert.match(currentContract, /pairing_relay_url/)
-  assert.match(currentContract, /prepare-git-cache.*no dependency edges/is)
   assert.match(
     currentContract,
-    /migrate.*(?:waits for|requires).*PostgreSQL.*create-bucket.*prepare-git-cache/is,
+    /executable `\/usr\/local\/bin\/buzz-pair-relay`/i,
   )
-  assert.match(currentContract, /BUZZ_S3_ADDRESSING_STYLE=path/)
-  assert.match(currentContract, /BUZZ_S3_FORCE_PATH_STYLE=true/)
+  assert.match(currentContract, /BUZZ_PAIRING_RELAY_URL/)
+  assert.match(currentContract, /NIP-11.*advertise.*exact root URL/is)
+  assert.match(currentContract, /prepare-git-cache.*may start in parallel/is)
+  assert.match(
+    currentContract,
+    /migrate.*waits for.*PostgreSQL.*bucket creation.*Git-cache/is,
+  )
+  assert.match(
+    currentContract,
+    /startup, schema, storage, and health contract/i,
+  )
   assert.match(historicalContract, /Historical status: superseded/i)
   assert.match(historicalContract, /does not describe the current/i)
 })
