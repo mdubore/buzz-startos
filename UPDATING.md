@@ -17,36 +17,39 @@ requires a runtime-contract review, immutable image pins, both package builds,
 and a reviewed pull request. In particular, do not derive the release target
 with `git rev-parse upstream/main`.
 
-## Current Package Baseline
+## Current Candidate And Published Baseline
 
-The current package identity is:
+The checked-out, test-only candidate identity is:
 
 ```text
-0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2
+0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0
 ```
 
 Its upstream portion is the exact official Buzz snapshot
-`63496cc1d4c6f1b7c613801bdcc694169dcf391a`; `:2` is the downstream StartOS
-wrapper revision. This revision retains the production-readiness and security
-controls, includes upstream authorization fix `00ecf2c`, recursively repairs
-only the disposable Git cache for overlay-backed installations, and adds the
-dedicated LAN-only pairing relay. The package is still test-only because its
-native images have critical vulnerability findings and live StartOS/device
-validation remains incomplete.
+`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:0` resets the downstream StartOS
+wrapper revision for the new upstream snapshot. The candidate retains the
+production-readiness controls, disposable Git-cache repair, and dedicated
+LAN-only pairing relay. It is not submission-ready: the dependency gate has an
+unwaived High finding, the Buzz, MinIO, and MinIO Client native images have
+Critical findings, the Buzz images also have Unknown-severity findings, and
+live StartOS/device validation remains incomplete. The complete fail-closed
+result is in `docs/security/651f637-runtime-scan.md`.
 
-The current immutable Buzz image pins are:
+The candidate's immutable Buzz image pins are:
 
-| Input         | Exact current value                                                       |
+| Input         | Exact candidate value                                                     |
 | ------------- | ------------------------------------------------------------------------- |
-| Upstream tag  | `ghcr.io/block/buzz:sha-63496cc`                                          |
-| OCI index     | `sha256:9de8aff13af33f3b17659e6eacda024b3070efda911c5e08d4d85a6c01c4deb6` |
-| `linux/amd64` | `sha256:5ac4697562230d32de4473d2eaf2eab098300c8aae1721e6bd4bf00b2956a5bf` |
-| `linux/arm64` | `sha256:414d8e183f3ccd45eb228cfdb1d6d88da463dd7440bc726c500abd435d0e7c3c` |
+| Upstream tag  | `ghcr.io/block/buzz:sha-651f637`                                          |
+| OCI index     | `sha256:3f8d3ff503dc735e5578e68194b1dbf543e6e792ae1c7e906c735ee269d2841c` |
+| `linux/amd64` | `sha256:e47c31ff9bdd0359e25b9115e69c4a46c1f9cf3c508295d5a020fee6a8f40632` |
+| `linux/arm64` | `sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688` |
 
-`docs/upstream/63496cc-runtime-contract.md` is the current upstream evidence.
-`docs/upstream/dd222a5-runtime-contract.md` is preserved only as the historical
-contract for the first published package; it does not describe the current
-snapshot or downstream revision.
+`docs/upstream/651f637-runtime-contract.md` is the candidate runtime evidence.
+The latest published local upgrade baseline is
+`0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2`, documented by
+`docs/upstream/63496cc-runtime-contract.md`. The older
+`docs/upstream/dd222a5-runtime-contract.md` remains historical only. Neither
+historical contract describes the candidate snapshot or downstream revision.
 
 ## 1. Prepare A Reviewed Companion-Fork Update
 
@@ -517,11 +520,10 @@ updating a pin. Add an OCI waiver only when the installed component and
 affected image digests have been independently verified; never waive a moving
 tag.
 
-The diagnostic
-[`dd222a5` runtime baseline](docs/security/dd222a5-runtime-scan.md) records why
-that historical image was blocked. It is not evidence for the current
-`63496cc:2` package. Current evidence comes from the `63496cc` runtime contract,
-current scan record, and immutable pins.
+The `dd222a5` and `63496cc` scan records are historical evidence for their
+respective package snapshots. They are not evidence for the checked-out
+`651f637:0` candidate. Candidate evidence comes from the `651f637` runtime
+contract, `651f637` security checkpoint, and immutable pins.
 
 ## 7. Update Package Metadata
 

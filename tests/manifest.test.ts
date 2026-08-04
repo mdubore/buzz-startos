@@ -43,22 +43,28 @@ const forbiddenDocumentationClaims = [
   {
     name: 'positive remote mobile claims',
     pattern:
-      /(?:remote (?:mobile|Android)(?: (?:use|pairing))?|(?:mobile|Android)(?: (?:use|pairing))? away from (?:the |your )?home network)\s+(?:is\s+)?(?:currently\s+)?(?:enabled|available|ready|supported|verified|working|works)/i,
+      /(?:remote (?:mobile|Android)(?: (?:use|pairing))?|(?:mobile|Android)(?: (?:use|pairing))? away from (?:the |your )?home network)\s+(?:is\s+)?(?:currently\s+)?(?:enabled|available|ready|supported|verified|working|works)|you\s+can\s+(?:use|pair)\s+(?:an?\s+)?(?:Android|mobile)(?:\s+(?:device|app))?\s+(?:outside|away from)\s+(?:the |your )?home network|(?:Android|mobile)(?:\s+(?:use|pairing))?\s+(?:works|is\s+(?:supported|verified|available))\s+(?:outside|away from)\s+(?:the |your )?home network/i,
     examples: [
       'Remote mobile use is supported.',
       'Remote Android pairing is enabled.',
       'Remote Android pairing is available.',
       'Remote Android pairing is ready.',
       'Remote Android pairing is currently available.',
+      'You can use Android outside your home network.',
+      'Android pairing works outside the home network.',
     ],
   },
   {
-    name: 'positive unmodified Android claims',
+    name: 'positive local Android claims',
     pattern:
-      /unmodified Android(?: application| app)?\s+(?:is|has been)\s+(?:verified|supported)|supports? (?:the )?unmodified Android/i,
+      /(?:unmodified\s+)?Android(?:\s+(?:application|app))?(?:\s+(?:local\s+pairing|pairing))?\s+(?:(?:is|has been)\s+)?(?:verified|supported|working|works)\b(?:\s+(?:locally|on\s+(?:the\s+)?LAN))?|(?:local\s+Android|Android\s+local)\s+pairing\s+(?:(?:is|has been)\s+)?(?:verified|supported|working|works)\b|supports?\s+(?:the\s+)?(?:unmodified\s+)?Android(?:\s+local\s+pairing)?/i,
     examples: [
       'The unmodified Android application is verified.',
       'This setup supports unmodified Android.',
+      'Unmodified Android works on the LAN.',
+      'Android local pairing is verified.',
+      'Android pairing works locally.',
+      'Local Android pairing is supported.',
     ],
   },
   {
@@ -343,6 +349,24 @@ for (const forbiddenClaim of forbiddenDocumentationClaims) {
   })
 }
 
+test('mobile contradiction guards allow explicit unsupported boundaries', () => {
+  const warnings = [
+    'Unmodified Android remains unsupported.',
+    'Android local pairing is not verified.',
+    'You cannot use Android outside your home network.',
+    'Remote mobile is not supported.',
+  ]
+  const mobileClaims = forbiddenDocumentationClaims.filter(({ name }) =>
+    name.startsWith('positive'),
+  )
+
+  for (const warning of warnings) {
+    for (const claim of mobileClaims) {
+      assert.doesNotMatch(warning, claim.pattern)
+    }
+  }
+})
+
 test('documents the LAN-only mobile pairing beta boundary', async () => {
   const documents = await Promise.all(
     ['README.md', 'instructions.md'].map((path) => readFile(path, 'utf8')),
@@ -375,10 +399,110 @@ test('documents the LAN-only mobile pairing beta boundary', async () => {
 
   assert.match(documents[0], /BUZZ_PAIRING_RELAY_URL/)
   assert.match(documents[0], /internal port\s+`5000`/i)
-  assert.match(documents[1], /mdubore\/buzz9/)
-  assert.match(documents[1], /78a155f92/)
-  assert.match(documents[1], /b953803bc/)
-  assert.match(documents[1], /4ac56fce1/)
+  for (const document of documents) {
+    assert.match(document, /native-root-aware/i)
+    assert.match(document, /Buzz Desktop.*(?:and|&)\s+`?buzz-acp`?/is)
+    assert.match(
+      document.replace(/\s+/g, ' '),
+      /current.{0,80}configuration.{0,80}unmodified Android.{0,120}rejects.{0,120}private StartOS (?:Root )?CA.{0,120}(?:secure (?:pairing|connection).{0,50}fails|fails.{0,50}secure (?:pairing|connection))/i,
+    )
+  }
+})
+
+test('routes volatile evidence through one stable index', async () => {
+  const readme = await readFile('README.md', 'utf8')
+
+  assert.match(readme, /\]\(docs\/EVIDENCE\.md\)/)
+  assert.doesNotMatch(readme, new RegExp(UPSTREAM.shortCommit, 'i'))
+
+  const evidence = await readFile('docs/EVIDENCE.md', 'utf8')
+  const runtimePath = `upstream/${UPSTREAM.shortCommit}-runtime-contract.md`
+  const securityPath = `security/${UPSTREAM.shortCommit}-runtime-scan.md`
+  assert.match(
+    evidence,
+    new RegExp(`\\]\\(${runtimePath.replaceAll('.', '\\.')}\\)`),
+  )
+  assert.match(
+    evidence,
+    new RegExp(`\\]\\(${securityPath.replaceAll('.', '\\.')}\\)`),
+  )
+})
+
+test('keeps the contributor README stable and complete', async () => {
+  const readme = await readFile('README.md', 'utf8')
+
+  const forbiddenIdentities = [
+    /\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/,
+    /\b\d+\.\d+\.\d+-main\.\S+/i,
+    /\bdesktop-v\d+\.\d+\.\d+\b/i,
+    /\bghcr\.io\/\S+:sha-[0-9a-f]+\b/i,
+    /\bsha256:[0-9a-f]{64}\b/i,
+    /\b[0-9a-f]{7,40}\b/i,
+    /`[0-9a-f]{7,40}`/i,
+    /github\.com\/[^\s)]+\/commit\/[0-9a-f]{7,40}/i,
+    /\b(?:Start SDK|@start9labs\/start-sdk|Node\.js|Start CLI|Docker Buildx|fast-uri)\s+`?\d+\.\d+\.\d+/i,
+    /^\s*(?:upstream_snapshot|package_identity|candidate_image_policy|security_status):/im,
+    /github\.com\/mdubore\/buzz-startos\/releases\/(?:tag|download)\//i,
+  ] as const
+  for (const identity of forbiddenIdentities) {
+    assert.doesNotMatch(readme, identity)
+  }
+
+  for (const source of [
+    'startos/versions/current.ts',
+    'startos/image-pins.ts',
+    'UPDATING.md',
+    'docs/EVIDENCE.md',
+  ]) {
+    assert.match(
+      readme,
+      new RegExp(`\\]\\(${source.replaceAll('.', '\\.')}\\)`),
+    )
+  }
+
+  for (const action of [
+    'Connection Information',
+    'Configure Pairing Relay',
+    'Add Member',
+    'Remove Member',
+    'List Members',
+    'Complete Initial Setup',
+    'Verify Stable State',
+    'Verify Canonical URL',
+  ]) {
+    assert.match(readme, new RegExp(action, 'i'))
+  }
+  for (const volume of ['startos', 'postgres', 'redis', 'media', 'git-cache']) {
+    assert.match(readme, new RegExp(`\`${volume}\``))
+  }
+  for (const port of [3000, 5000, 5432, 6379, 9000, 9001, 8080, 9102]) {
+    assert.match(readme, new RegExp(`\`${port}\``))
+  }
+  for (const interfaceName of [
+    'Buzz Web',
+    'Buzz Relay',
+    'Buzz Pairing Relay',
+  ]) {
+    assert.match(readme, new RegExp(interfaceName, 'i'))
+  }
+
+  assert.match(readme, /Dependencies[\s\S]{0,300}\bNone\b/i)
+  assert.match(readme, /canonical URL[\s\S]{0,80}immutable/i)
+  assert.match(readme, /media[\s\S]{0,100}(?:bearer|link-accessible)/i)
+  assert.match(readme, /hosted[\s\S]{0,80}iOS[\s\S]{0,80}disabled/i)
+  assert.match(readme, /admin[\s\S]{0,100}disabled/i)
+  assert.match(readme, /full browser client[\s\S]{0,80}(?:not|no|unavailable)/i)
+  assert.match(readme, /unmodified Android[\s\S]{0,160}private[\s\S]{0,80}CA/i)
+  assert.match(
+    readme,
+    /remote mobile[\s\S]{0,120}(?:unsupported|not supported)/i,
+  )
+  assert.match(readme, /candidate[\s\S]{0,160}(?:test-only|security-blocked)/i)
+  assert.match(readme, /Redis[\s\S]{0,80}60 seconds/i)
+  assert.match(readme, /pairing[\s\S]{0,80}60 seconds/i)
+  assert.match(readme, /PostgreSQL[\s\S]{0,80}120 seconds/i)
+  assert.match(readme, /MinIO[\s\S]{0,80}120 seconds/i)
+  assert.match(readme, /Buzz[\s\S]{0,80}180 seconds/i)
 })
 
 test('documents audited 651f637 provenance and historical snapshot scope', async () => {
@@ -408,18 +532,20 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.match(previousContract, /63496cc/i)
   assert.match(previousContract, /00ecf2c/i)
 
-  const provenanceDocumentation = `${readme}\n${updating}`
   assert.match(readme, /downstream companion-client fork/i)
   assert.match(readme, /official `block\/buzz` image pins/i)
+  assert.match(readme, /docs\/EVIDENCE\.md/)
+  assert.doesNotMatch(readme, new RegExp(UPSTREAM.shortCommit, 'i'))
   assert.match(updating, /Prepare A Reviewed Companion-Fork Update/i)
   assert.match(updating, /git switch -c .* origin\/main/i)
   assert.match(updating, /rev-parse upstream\/main/i)
-  assert.match(updating, /historical image was blocked/i)
-  assert.match(updating, /not evidence for the current\s+`63496cc:2` package/i)
-  assert.doesNotMatch(
-    provenanceDocumentation,
-    /clean, fast-forward-only mirror|existing Buzz image|newer candidate/i,
+  assert.match(updating, /latest published local upgrade baseline/i)
+  assert.match(
+    updating,
+    /not evidence for the checked-out\s+`651f637:0` candidate/i,
   )
+  assert.match(updating, /651f637` security checkpoint/i)
+  assert.doesNotMatch(updating, /clean, fast-forward-only mirror/i)
 
   assert.match(
     currentContract,

@@ -8,8 +8,9 @@ tests, assets, documentation, and build/release automation.
 Buzz application changes belong upstream:
 
 - `block/buzz` is the application source of truth.
-- `mdubore/buzz9` is a clean, fast-forward-only source mirror.
-- Do not add StartOS files or downstream application patches to `buzz9`.
+- `mdubore/buzz9` is the downstream companion-client fork and carries the
+  reviewed native-root changes required by private StartOS addresses.
+- Do not add StartOS server-package files to `buzz9`.
 - Do not copy Buzz application source into this package to avoid an upstream
   review.
 
@@ -134,3 +135,26 @@ Every pull request should state:
 
 Require review before merge. Do not auto-merge upstream changes or publish
 artifacts from an unreviewed branch.
+
+## Start9 Community Registry
+
+The initial submission is email-driven under the official
+[StartOS publishing guide](https://docs.start9.com/packaging/publishing.html):
+
+1. A maintainer manually emails <submissions@start9.com> with a link to the
+   public GitHub repository.
+2. Start9 forks the repository into the
+   [Start9-Community organization](https://github.com/Start9-Community) and
+   returns any review feedback.
+3. Later changes target the Start9-Community fork by pull request, not merely
+   this original repository.
+4. A PR merge by Start9 triggers the automated build and publication to
+   `community-beta`.
+5. After the beta is tested, a maintainer manually requests promotion to the
+   production `community` registry by email or an issue on the fork.
+
+Email, push, pull request, and promotion actions remain manual release-owner
+decisions. None of those Community Registry actions has been performed for
+this candidate: it has not been submitted, forked into the registry pipeline,
+pushed there, proposed by pull request, published to beta, or promoted.
+These actions were not performed by this documentation change.

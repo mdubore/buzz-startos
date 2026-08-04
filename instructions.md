@@ -1,182 +1,157 @@
 # Buzz
 
 Your first setup choice is permanent: the selected StartOS URL identifies this
-Buzz community and is used in authentication, media, and Git links.
+Buzz community and is used for authentication, media, and Git links.
 
 > [!WARNING]
-> This sideload tracks a Buzz development snapshot. Backup and restore have not
-> been validated on real StartOS devices. Do not use this package as the only
-> copy of irreplaceable data.
+> This package is a security-blocked, test-only candidate. Its dependency and
+> image findings must be remediated and its StartOS device tests must be
+> completed before production or Community Registry use. Do not make it the
+> only copy of irreplaceable data.
 
 ## Documentation
 
-- [Upstream Buzz documentation](https://github.com/block/buzz#readme) -
-  product capabilities, supported clients, and upstream usage.
-- [Historical published-package pre-upgrade audit][pre-upgrade-audit] -
-  required recovery and channel-authority checks before updating the older
-  `dd222a5` package.
+- [Upstream Buzz documentation](https://github.com/block/buzz#readme) — product
+  capabilities, clients, and upstream usage.
+- [Pre-upgrade audit](https://github.com/mdubore/buzz-startos/blob/main/docs/operations/PRE_UPGRADE_AUDIT.md) — required recovery and channel-authority checks
+  before updating an older published package.
+
+## What You Get on StartOS
+
+The package exposes three interfaces:
+
+- **Buzz Web** provides limited invite and repository browser routes.
+- **Buzz Relay** is the main HTTP and WebSocket endpoint used by Buzz clients.
+- **Buzz Pairing Relay** is a temporary WebSocket rendezvous used only while
+  adding a device.
+
+PostgreSQL, Redis, and MinIO run privately inside the service. The package
+manages their credentials, the immutable community identity, the pairing URL,
+and relay admission. Use Buzz Desktop for channels, direct messages, media,
+canvases, workflows, search, agents, and the rest of the workspace.
 
 ## Getting Set Up
 
-1. Open the critical **Complete Initial Setup** item shown after installation.
-2. Enter the owner's Nostr public key as an `npub` or 64-character hexadecimal
-   key.
-3. Select the StartOS URL that you intend to keep for this community.
-4. Complete **Configure Pairing Relay** by selecting the WebSocket address
-   shown for the pairing interface.
+1. Open **Complete Initial Setup** when StartOS presents it.
+2. Enter the owner's Nostr public key as an `npub` or hexadecimal public key.
+   Never enter an `nsec` or another private key into a StartOS action.
+3. Select the StartOS URL that you intend to keep permanently for this
+   community.
+4. Complete **Configure Pairing Relay** with an address shown for the **Buzz
+   Pairing Relay** interface.
 5. Start Buzz after both setup items clear.
 6. Run **Connection Information** and copy the **Relay WebSocket URL**.
-7. Choose a compatible Buzz desktop client using the certificate guidance
-   below, configure it with that relay URL, and authenticate using the private
-   key that matches the stored owner public key.
+7. Configure a compatible Buzz Desktop client with that relay URL, then
+   authenticate using the private key that matches the stored owner public key.
 
-Enter only the public `npub` or hex key in StartOS. Never enter an `nsec` or
-other private key into a StartOS action.
+The canonical URL cannot be renamed by this package. If the original address
+is unavailable after a restore or gateway change, Buzz remains blocked until
+you restore that same address. You may replace the pairing URL with another
+address currently exported by the pairing interface.
 
-> [!IMPORTANT]
-> A compatible upstream Buzz client can validate an interface address with a
-> publicly trusted certificate normally. For a private StartOS address marked
-> **Root CA**, use the reviewed
-> [`mdubore/buzz9` companion build][companion-merge] at merge `78a155f92`, or a
-> later reviewed build that retains desktop native-root commit `b953803bc` and
-> ACP native-root commit `4ac56fce1`. The desktop client and its bundled
-> `buzz-acp` sidecar make independent WSS connections, so both paths must load
-> native certificate roots and the StartOS Root CA must be installed in the
-> operating-system certificate store. Keep certificate and hostname validation
-> enabled.
+## Connecting Desktop and ACP over WSS
 
-No published installer asset for that exact companion revision has been
-verified. Build or use the reviewed revision and follow its pinned
-[README development commands][companion-readme] and
-[agent build guidance][companion-agents]. This companion change affects the
-desktop and ACP clients only; it does not modify Buzz Android or another mobile
-app, prove mobile support, or replace the future public-tunnel and publicly
-trusted certificate design for remote use.
+A public-domain interface with a publicly trusted certificate works with a
+normal compatible client. A private `.local`, IP, or private-domain interface
+normally presents a certificate signed by the StartOS Root CA.
 
-If you prefer a publicly trusted certificate, add and enable a public domain
-with an ACME certificate such as Let's Encrypt on the Buzz interface before
-running **Complete Initial Setup**, then select that HTTPS address as the
-canonical URL. Adding the address does not by itself make the interface public;
-you must separately configure and enable the corresponding gateway, DNS, and
-port forwarding. The package cannot change the canonical host after setup. If
-you also configure that real domain privately with StartOS split DNS, LAN
-clients can use the same hostname and public certificate without routing out to
-the public gateway.
+Buzz Desktop and `buzz-acp` make separate WSS connections. For a private
+StartOS address, use a reviewed
+[native-root-aware companion build](https://github.com/mdubore/buzz9) for both
+paths and install the StartOS Root CA in your operating-system certificate
+store. A desktop-only change can leave ACP agent sessions unable to connect.
+Keep certificate and hostname validation enabled.
 
-The StartOS browser interface exposes only limited invite and repository
-routes. Use the external client for channels, direct messages, media,
-canvases, workflows, search, agents, and the rest of the workspace. The
-server-side mobile pairing path is available as a local-network beta, with the
-Android certificate limitation described below.
+You may instead choose a public domain with a publicly trusted certificate as
+the canonical host, but configure and enable it before **Complete Initial
+Setup**. The package does not create the domain, gateway, DNS record, port
+forwarding, or certificate for you.
 
-## Local Mobile Pairing Beta
+## Local Mobile Pairing
 
-The current verified beta configuration is LAN-only. The package exposes the
-main and pairing interfaces, but it does not enable remote access. Mobile use
-outside your local network is not supported or validated by this setup.
+The server-side pairing setup is **LAN-only** and does not enable remote
+access. Keep the desktop and Android device on the same local network while
+testing.
 
-Previously, the main relay advertised pairing support without a NIP-11
-`pairing_relay_url`, so Buzz Desktop fell back to `<main-relay>/pair`. The main
-relay does not serve WebSocket pairing at `/pair`; StartOS correctly routed the
-request there, and the main relay correctly returned `404 Not Found`. This was
-a discovery, configuration, and topology mismatch. It was not the Android TLS
-issue, did not mean the main relay was down, and did not indicate that normal
-relay traffic had failed.
+The earlier topology advertised pairing without a NIP-11
+`pairing_relay_url`. Buzz Desktop therefore derived `<main relay>/pair`; the
+main relay returned HTTP `404` because it does not serve pairing there. This
+was a discovery and routing mismatch, not a failed main relay and not the
+Android TLS problem.
 
-The package now exports a separate **Buzz Pairing Relay** interface backed by
-Buzz's temporary, stateless pairing service. **Configure Pairing Relay** stores
-the exported root `wss://` address, and the main relay advertises that exact
-address in NIP-11. Buzz Desktop connects directly to the dedicated root address
-instead of adding `/pair` to the main relay URL. Health requires a bounded,
-successful WebSocket 101 Switching Protocols handshake rather than merely an
-HTTP listener response. This server-side change fixes the prior 404 without a
-Buzz client modification.
+The package now provides the dedicated **Buzz Pairing Relay** WSS interface.
+**Configure Pairing Relay** stores its root address, and NIP-11 advertises the
+exact `pairing_relay_url` as a dedicated root. Buzz Desktop connects directly
+to it instead of appending `/pair`. This fixes the prior server-side 404
+without a Buzz client modification.
 
-To try local pairing:
+To exercise the local server path:
 
-1. Keep your desktop and Android device on the same local network.
-2. Run **Configure Pairing Relay** and select a LAN-reachable WSS address.
-3. Confirm **Buzz Pairing Relay** is healthy.
-4. In Buzz Desktop, choose **Add mobile**, then scan the QR code with Buzz
-   Android.
+1. Run **Configure Pairing Relay** and select a LAN-reachable WSS address.
+2. Confirm **Buzz Pairing Relay** is healthy.
+3. In Buzz Desktop, choose **Add mobile**.
+4. Scan the displayed QR code with Buzz Android.
 
-The pairing relay is used only for the encrypted account transfer. After
-pairing, normal mobile traffic uses the main relay.
+The pairing relay is temporary and stateless. After the encrypted account
+transfer, ordinary mobile traffic uses the main relay.
 
-Removing the 404 does not prove that the unmodified Android application can
-complete TLS. Private StartOS addresses normally use a certificate signed by
-the StartOS Root CA. Depending on its trust-store behavior, the unmodified
-Android client may not trust that private/local CA even on LAN. This is a
-separate TLS trust and interoperability limitation from the fixed 404. Android
-support remains unverified until it passes a real-device test. Keep certificate
-and hostname validation enabled; do not use an invalid-certificate bypass or
-modify the mobile app as a long-term workaround.
+In the current private-CA configuration, unmodified Android rejects the
+certificate path signed by the private StartOS Root CA, so the secure pairing
+connection fails with an Android TLS trust error. This observed result is
+specific to the current configuration; it does not establish that Android
+cannot work with a publicly trusted certificate. Unmodified Android remains
+unsupported here. Do not
+bypass certificate or hostname checks and do not modify the mobile app as a
+long-term workaround.
 
-Remote use is a separate future project: a VPS running StartTunnel or an
-equivalent public tunnel, public DNS, publicly trusted certificates, and
-routing for both the main and pairing WSS interfaces. Optional split DNS can
-keep local traffic on the LAN. The goal is an architecture and user guide that
-requires no changes to `buzz-startos`, Buzz Desktop, or Buzz Android, but that
-future result is not implemented or guaranteed here. StartOS may support other
-valid reachability designs. Until one is configured and tested, this package
-does not provide supported mobile use away from your home network and does not
-claim Tor, clearnet, or StartTunnel reachability.
+Remote mobile is not supported. A future StartTunnel or equivalent VPS project
+may provide public DNS, publicly trusted certificates, and routing for both the
+main and pairing WSS interfaces, with optional split DNS for local traffic.
+That future design and user guide are separate from this package and have not
+been implemented or validated.
 
-## Managing The Private Relay
+## Managing Relay Access
 
-Use the StartOS Actions view:
+Use these visible actions:
 
-- **Add Member** admits a new `npub` or hex identity as a `member` or `admin`.
-  Re-adding an existing identity does not change its role.
-- **Remove Member** revokes the selected role.
-- **List Members** displays the current roster.
 - **Connection Information** shows the canonical web URL, main relay URL,
-  pairing relay URL, and owner public key.
-- **Configure Pairing Relay** replaces the advertised pairing WSS address if
-  your available StartOS addresses change.
+  pairing relay URL, and owner public key. It does not reveal service secrets.
+- **Configure Pairing Relay** replaces the advertised pairing address with one
+  currently exported by the pairing interface.
+- **Add Member** admits a new `npub` or hexadecimal public key as a `member` or
+  `admin`. Re-adding an existing identity does not change its role.
+- **Remove Member** removes the selected relay role.
+- **List Members** displays the current relay roster.
 
-The owner identity is permanent and cannot be added or removed through the
-membership actions. Relay admission is separate from membership inside an
-individual Buzz channel, and the relay `admin` role does not enable the
+The owner identity is permanent and cannot be added or removed through these
+membership actions. Relay admission is separate from membership and roles
+inside an individual Buzz channel. The relay `admin` role does not enable the
 disabled upstream admin dashboard.
 
-## Network And Backups
+## Backups and Updates
 
-Enable LAN, Tor, or public StartOS gateways deliberately. The package does not
-enable remote access, Tor, or public access automatically, and additional
-addresses are not aliases for the canonical URL selected during setup. If that
-original address is unavailable after a restore or gateway change, Buzz stays
-blocked until the same address is restored.
+Create a StartOS backup before updating. The package is designed to preserve
+the database, object storage, wrapper state, Redis continuity data, canonical
+URL, pairing URL, owner identity, and stable service secrets, but this candidate
+has not completed real-device backup and restore validation.
 
-Create a StartOS backup before applying an update. The package is designed to
-preserve the database, object storage, wrapper state, Redis continuity data,
-canonical URL, owner identity, and stable service secrets, but this behavior
-has not yet been proven by a restore on a real StartOS device.
-
-During startup, a root-only one-shot recursively repairs ownership only on the
-disposable `/data/git` cache for the unprivileged Buzz account, including
-populated legacy caches. This supports overlay-backed Server Pure installations
-without running the relay as root. Durable Git objects remain authoritative in
-MinIO, so the cache can rehydrate; persistent repository data is not treated as
-disposable.
-
-Before updating the older published `dd222a5` package, complete
-[`PRE_UPGRADE_AUDIT.md`][pre-upgrade-audit]. It requires a
-verified backup and clean-target restore, and confirmation that an active owner
-exists in every channel. Stop if a channel has no active owner or has unexplained
-role changes. The updater will not automatically promote an arbitrary owner;
-governance repair requires a separate, explicitly reviewed recovery procedure.
+Before updating an older published package, complete
+[`PRE_UPGRADE_AUDIT.md`](https://github.com/mdubore/buzz-startos/blob/main/docs/operations/PRE_UPGRADE_AUDIT.md).
+It requires a verified backup and clean-target restore, plus confirmation that
+an active owner exists in every channel. Stop if a channel has no active owner
+or has unexplained role changes.
+The updater will not automatically promote an arbitrary owner.
 
 ## Limitations
 
-- Media files are available to anyone who has their content-addressed Buzz
-  link, although the package does not make those links automatically
-  discoverable. Do not treat media URLs as private credentials.
-- Hosted/background iOS push delivery is disabled; normal relay connectivity
-  is unaffected.
-- The upstream admin web application and full browser client are not enabled.
-
-[pre-upgrade-audit]: https://github.com/mdubore/buzz-startos/blob/main/docs/operations/PRE_UPGRADE_AUDIT.md
-[companion-merge]: https://github.com/mdubore/buzz9/commit/78a155f9221a8872b62706867fd017692ede0886
-[companion-readme]: https://github.com/mdubore/buzz9/blob/78a155f9221a8872b62706867fd017692ede0886/README.md#going-further
-[companion-agents]: https://github.com/mdubore/buzz9/blob/78a155f9221a8872b62706867fd017692ede0886/AGENTS.md
+- Unmodified Android local pairing is unsupported until its private-CA trust
+  path passes a real-device test.
+- Mobile use outside the local network is unsupported until a separate
+  public-certificate tunnel deployment is configured and validated.
+- Media URLs are link-accessible. Treat a content-addressed media URL as a
+  bearer link.
+- Hosted background iOS push delivery is disabled; ordinary relay connections
+  are unaffected.
+- The upstream admin web application and full browser client are disabled.
+- Failed restore diagnostics may contain the database password. Do not publish
+  or attach unredacted logs.

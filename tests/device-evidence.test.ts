@@ -2041,7 +2041,10 @@ test('keeps contributor and operator documentation aligned with open gates', asy
     readFile(repositoryFile('TODO.md'), 'utf8'),
   ])
 
-  assert.match(readme, /official\s+stable StartOS `0\.4\.0`/)
+  assert.match(
+    readme,
+    /official stable StartOS\s+\[publishing guide\]\(https:\/\/docs\.start9\.com\/packaging\/publishing\.html\)/i,
+  )
   assert.match(readme, /npm run verify:device-evidence/)
   assert.match(readme, /npm run verify:device-promotion/)
   assert.match(readme, /DEVICE_CANDIDATE\.json/)

@@ -6,35 +6,50 @@
       Buzz `CVE-2026-53613` and `CVE-2026-53615` unknown-severity results; and
       update the development dependency lock from vulnerable
       `fast-uri@3.1.4` to a reviewed fixed version. Do not waive a critical or
-      unknown-severity finding. See
+      unknown-severity finding. Rerun dependency signatures, dependency
+      vulnerability policy, image-pin verification, and the complete scan
+      after every remediation. See
       [`docs/security/651f637-runtime-scan.md`](docs/security/651f637-runtime-scan.md).
-- [ ] Validate a live StartOS update from
-      `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1` to the current `:2`
-      revision. Confirm the no-op forward migration preserves state, both
-      blocking setup actions behave correctly, and both interfaces become
-      healthy.
+- [ ] After the security gate clears, build and inspect native x86_64 and
+      aarch64 candidate artifacts. Generate `SHA256SUMS`, inspect both
+      manifests and commitments, verify both archives against the committed
+      signing public key, and confirm each archive contains only its target
+      architecture.
+- [ ] Perform clean installs of the remediated candidate on real x86_64 and
+      aarch64 StartOS devices. Complete initial and pairing setup, start all
+      daemons, and confirm both exported relay interfaces and their health
+      checks.
+- [ ] Validate live StartOS upgrades from the published
+      `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2` package to the
+      remediated candidate on both architectures. Confirm the no-op forward
+      migration preserves state, setup and recovery actions behave correctly,
+      and both interfaces become healthy.
 - [ ] On a real Buzz Desktop client, verify NIP-11 discovery, the dedicated
       pairing-root WebSocket handshake, and QR-code generation without any
       request to the main relay's `/pair` path.
-- [ ] On an unmodified Android device on the LAN, test the complete pairing
-      flow and record whether the app accepts the StartOS Root CA certificate.
-      Keep the server-side 404 result separate from this TLS/device result.
+- [ ] Keep unmodified Android unsupported. On a real Android device on the LAN,
+      test the complete pairing flow and record whether the app accepts the
+      StartOS Root CA certificate. The dedicated pairing interface has already
+      resolved the diagnosed server topology; this task measures the separate
+      TLS trust and device result.
 - [ ] Create and validate a remote-mobile VPS architecture and user guide using
       StartTunnel or an equivalent public tunnel. Cover public DNS, publicly
       trusted certificates, and routing for both the main and pairing WSS
       interfaces; optional split DNS; and LAN/cellular acceptance testing.
       Ideally no `buzz-startos`, desktop, or mobile client changes are needed,
       but verify that rather than assuming it.
-- [ ] Rebuild both architecture packages from the final release commit,
-      generate `SHA256SUMS`, inspect both manifests and commitments, and verify
-      both archives against the committed signing public key. Freeze those exact
-      identities and the observed per-architecture StartOS build/image hashes in
+- [ ] Freeze the final reviewed architecture artifacts and observed
+      per-architecture StartOS build/image hashes in
       [`docs/testing/DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json);
       do not replace its `UNFROZEN` state with synthetic values.
 - [ ] Complete every x86_64 and aarch64 row in
       [`docs/testing/DEVICE_TEST_MATRIX.md`](docs/testing/DEVICE_TEST_MATRIX.md),
-      filling all 46 cells with independently reviewed real-device and artifact
-      evidence only.
+      including the full client/device matrix and filling all 46 cells with
+      independently reviewed real-device and artifact evidence only.
+- [ ] Obtain an independent final review of the runtime contract, security
+      remediation and re-scan, native artifacts, clean-install evidence,
+      upgrade evidence, client/device matrix, backup/restore results, and
+      Community Registry documentation before any submission request.
 - [ ] Implement a protected evidence workflow that records authenticated,
       distinct operator/reviewer identities plus immutable workflow run and
       attachment IDs, verify that provenance in `verify:device-promotion`, and

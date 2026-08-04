@@ -681,3 +681,25 @@ test('security operations cover signer lifecycle and repository control gaps', (
     /package\.yml[\s\S]{0,100}release\.yml[\s\S]{0,100}Node 24/i,
   )
 })
+
+test('documents the manual Community Registry submission boundary', () => {
+  const contributing = repositoryFile('CONTRIBUTING.md')
+
+  assert.match(contributing, /submissions@start9\.com/i)
+  assert.match(
+    contributing,
+    /initial submission[\s\S]{0,300}public GitHub repository/i,
+  )
+  assert.match(
+    contributing,
+    /Start9[\s\S]{0,100}forks?[\s\S]{0,100}Start9-Community/i,
+  )
+  assert.match(contributing, /later changes[\s\S]{0,180}Start9-Community fork/i)
+  assert.match(contributing, /PR merge[\s\S]{0,180}community-beta/i)
+  assert.match(contributing, /promot[\s\S]{0,180}community/i)
+  assert.match(
+    contributing,
+    /email[\s\S]{0,240}push[\s\S]{0,240}pull request[\s\S]{0,240}promotion[\s\S]{0,240}manual/i,
+  )
+  assert.match(contributing, /not (?:yet )?(?:performed|submitted|published)/i)
+})
