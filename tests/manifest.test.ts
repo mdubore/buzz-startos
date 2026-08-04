@@ -167,7 +167,7 @@ test('uses the audited 651f637 snapshot as the current package version', () => {
   }
 })
 
-test('upgrades from the published local 63496cc:2 package', () => {
+test('upgrades from the local sideload 63496cc:2 package', () => {
   const previous = ExtendedVersion.parse(PREVIOUS_VERSION)
   const next = versionGraph.currentVersion()
 
@@ -539,7 +539,11 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.match(updating, /Prepare A Reviewed Companion-Fork Update/i)
   assert.match(updating, /git switch -c .* origin\/main/i)
   assert.match(updating, /rev-parse upstream\/main/i)
-  assert.match(updating, /latest published local upgrade baseline/i)
+  const localBaseline = updating.match(
+    /The latest local sideload upgrade baseline is[\s\S]*?Neither\s+historical contract describes the candidate snapshot or downstream revision\./i,
+  )
+  assert.ok(localBaseline, 'missing local sideload upgrade baseline paragraph')
+  assert.doesNotMatch(localBaseline[0], /\bpublished\b/i)
   assert.match(
     updating,
     /not evidence for the checked-out\s+`651f637:0` candidate/i,

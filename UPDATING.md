@@ -17,7 +17,7 @@ requires a runtime-contract review, immutable image pins, both package builds,
 and a reviewed pull request. In particular, do not derive the release target
 with `git rev-parse upstream/main`.
 
-## Current Candidate And Published Baseline
+## Current Candidate And Upgrade Baselines
 
 The checked-out, test-only candidate identity is:
 
@@ -45,7 +45,7 @@ The candidate's immutable Buzz image pins are:
 | `linux/arm64` | `sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688` |
 
 `docs/upstream/651f637-runtime-contract.md` is the candidate runtime evidence.
-The latest published local upgrade baseline is
+The latest local sideload upgrade baseline is
 `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2`, documented by
 `docs/upstream/63496cc-runtime-contract.md`. The older
 `docs/upstream/dd222a5-runtime-contract.md` remains historical only. Neither
