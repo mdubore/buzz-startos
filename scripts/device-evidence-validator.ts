@@ -79,9 +79,9 @@ export type CandidateContract = {
   }
   package: {
     tag: string | null
-    version: string | null
+    version: string
     packageCommit: string | null
-    upstreamCommit: string | null
+    upstreamCommit: string
     signerFingerprint: string
     manifestMinimumStartos: '0.4.0-beta.10'
     sdkVersion: string
@@ -765,7 +765,8 @@ function candidateContractErrors(value: unknown): string[] {
 
     if (
       startosIdentity.buildId !== null &&
-      typeof startosIdentity.buildId !== 'string'
+      (typeof startosIdentity.buildId !== 'string' ||
+        startosIdentity.buildId.trim().length === 0)
     ) {
       errors.push(`candidate StartOS ${architecture} buildId is invalid`)
     }
@@ -804,11 +805,10 @@ function candidateContractErrors(value: unknown): string[] {
     errors.push('candidate package tag is invalid')
   }
   if (
-    packageIdentity.version !== null &&
-    (typeof packageIdentity.version !== 'string' ||
-      !/^[^\s]+:[0-9]+$/.test(packageIdentity.version))
+    typeof packageIdentity.version !== 'string' ||
+    !/^[^\s]+:[0-9]+$/.test(packageIdentity.version)
   ) {
-    errors.push('candidate package version is invalid')
+    errors.push('candidate package version must identify the proposed version')
   }
   if (
     packageIdentity.packageCommit !== null &&
@@ -816,11 +816,8 @@ function candidateContractErrors(value: unknown): string[] {
   ) {
     errors.push('candidate package commit is invalid')
   }
-  if (
-    packageIdentity.upstreamCommit !== null &&
-    !isCommit(packageIdentity.upstreamCommit)
-  ) {
-    errors.push('candidate upstream commit is invalid')
+  if (!isCommit(packageIdentity.upstreamCommit)) {
+    errors.push('candidate upstream commit must identify the proposed source')
   }
   if (!isFingerprint(packageIdentity.signerFingerprint)) {
     errors.push('candidate signer fingerprint is invalid')
@@ -852,9 +849,7 @@ function candidateContractErrors(value: unknown): string[] {
 
   const frozenValues = [
     packageIdentity.tag,
-    packageIdentity.version,
     packageIdentity.packageCommit,
-    packageIdentity.upstreamCommit,
     ...(['x86_64', 'aarch64'] as const).flatMap((architecture) => {
       const startosIdentity = isRecord(architectures[architecture])
         ? architectures[architecture]

@@ -6,12 +6,25 @@ hardware. The target is the official stable StartOS `0.4.0` release with its
 exact build identity recorded. Manifest minimum `0.4.0-beta.10` is only the
 compatibility floor; a beta installation cannot satisfy this runbook.
 
+The staged candidate is **SECURITY-BLOCKED** and therefore **NO-GO** for both
+Community Registry beta submission and production promotion. It remains
+`UNFROZEN`, and no automated, static, image, or host-only result may be promoted
+to real-device evidence.
+
 This document defines the procedure. It does not report that any procedure has
 run. [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is the machine-readable
 candidate identity and [`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md) is the
-authoritative execution status. The candidate remains `UNFROZEN` until final
-native artifacts and official StartOS image identities are recorded during the
-release task.
+authoritative execution status. The proposed package version is
+`0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0`, built from reviewed
+upstream commit `651f6372754e60e3f936b3397040eb0f1e44c9f3`. The candidate remains
+`UNFROZEN` until final native artifacts and official StartOS image identities
+are recorded during the release task.
+
+The currently ignored `buzz_x86_64.s9pk`, `buzz_aarch64.s9pk`, and `SHA256SUMS`
+files are preparatory and non-final. Tasks 8 and 9 change tracked package bytes,
+so rebuild the artifacts after the final tracked commit and after the security
+gates clear. Do not use their current hashes, sizes, commitments, or manifests
+as candidate identity or device evidence.
 
 The accepted OS lineage is the official `start-os/v0.4.0` tag from
 `https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0`
@@ -42,13 +55,15 @@ restore diagnostics.
 
 ## Freeze The Candidate
 
-Before the first gate, record one candidate tag, package version, package commit,
-upstream commit, signer fingerprint, SDK version, native archive names, byte
-sizes, and SHA-256 hashes in `DEVICE_CANDIDATE.json`, then change its state to
-`FROZEN`. Both architectures must use those exact values. Do not invent an
-identity to exercise the release workflow; automated tests use a separate
-injected frozen fixture. The candidate contract is closed: unknown fields at
-any level are rejected rather than ignored.
+The unfrozen contract already records the proposed package version and upstream
+commit. Before the first gate, and only after security remediation and the final
+tracked commit, record one candidate tag, package commit, signer fingerprint,
+SDK version, native archive names, byte sizes, SHA-256 hashes, and observed
+native StartOS device-image identities in `DEVICE_CANDIDATE.json`, then change
+its state to `FROZEN`. Both architectures must use those exact values. Do not
+invent an identity to exercise the release workflow; automated tests use a
+separate injected frozen fixture. The candidate contract is closed: unknown
+fields at any level are rejected rather than ignored.
 
 The candidate tag and release assets are immutable. Evidence may be committed
 after the candidate tag, but the tested tag must not move and its assets must not
@@ -88,6 +103,65 @@ gates, hash a deterministic sanitized state inventory covering identities,
 channels, event IDs, media content hashes, Git refs/object IDs, canonical URL,
 and non-secret stable-state fingerprints. Recompute it afterward and explain any
 expected change.
+
+## Community Registry Beta Minimum
+
+Clear the documented security gate and rebuild both final native artifacts
+before any beta device run. Community Registry beta readiness then requires
+independently reviewed evidence on both native x86_64 and native aarch64 for
+every outcome below:
+
+1. Verify final artifact checksum, signer, manifest, commitment, and native
+   image architecture.
+2. Perform a clean install and observe the expected pre-setup startup block.
+3. Complete the Complete Initial Setup and Configure Pairing Relay initial setup
+   tasks.
+4. Confirm UI access through the canonical StartOS address and healthy service
+   state.
+5. Complete an authenticated main-relay WebSocket publish/query relay round
+   trip.
+6. Connect both Buzz Desktop and ACP to the main WSS endpoint.
+7. Generate a pairing QR code through the dedicated pairing WSS endpoint.
+8. Complete formal `UPG-01` from the exact published cross-architecture source
+   recorded in `DEVICE_CANDIDATE.json`, verify preserved state, and return both
+   interfaces to health:
+   - tag `v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2`
+   - version `0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2`
+   - package commit `0103ba850c08ae84cca5c623ea76c855d7a7f1a4`
+   - upstream commit `dd222a509b156ba52ed3219e895d7bf1cf322c92`
+   - signer `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c`
+   - x86_64 archive SHA-256
+     `8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2`
+   - aarch64 archive SHA-256
+     `72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638`
+9. Perform a hard uninstall and clean reinstall, confirming empty service data
+   and fresh initial-setup state.
+
+This is the exact minimum beta workflow; it is not production acceptance. All
+of these checks are currently unperformed and must remain `NOT RUN` until their
+real-device evidence is captured and independently reviewed.
+
+## Operator-Specific Local x86_64 Transition Preflight
+
+The operator's actual alpha-test path currently begins with one independently
+inspected local x86_64 sideload archive:
+
+- version `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2`
+- package commit `2ae96a9aa150d3fd50a19eaf5fa30a81b452c9e4`
+- upstream commit `63496cc1d4c6f1b7c613801bdcc694169dcf391a`
+- x86_64 archive SHA-256
+  `acc6224859b5fc4c945ab43d3a81ea961938459262616650bcd31851b8133b4e`
+
+This archive is not published and has no immutable release tag or corresponding
+aarch64 artifact. Its upgrade to the final candidate may be exercised on the
+operator's x86_64 StartOS device as a separate transition preflight after the
+security gate clears. Record the observed source hash, candidate hash, StartOS
+identity, commands, and result in local operator notes only.
+
+This preflight is outside the signed 46-cell evidence matrix. It cannot count
+toward Community Registry beta or production readiness, cannot complete formal
+`UPG-01`, and must never create a matrix `PASS`. Formal cross-architecture
+acceptance continues to use the published `dd222a5:2` source above.
 
 ## Execution Order
 
@@ -328,8 +402,10 @@ and no prior instance is expected to remain.
 ## Promotion Decision
 
 Production promotion requires all 46 matrix cells to link valid passing records
-for the same candidate, with independent approval and no open high or critical
-issues. Compare candidate identity across every record, run
+for the same candidate, with independent review and no open high or critical
+issues. That includes same-architecture backup and restore, both directions of
+cross-architecture restore, and the complete physical x86_64 and aarch64
+24-hour resource soak. Compare candidate identity across every record, run
 `npm run verify:device-promotion`, and verify the tag and release-asset hashes
 one last time. The strict command rejects `UNFROZEN` candidates and every
 `NOT RUN`, `FAIL`, `BLOCKED`, unlinked, stale, mismatched, or unreviewed cell.

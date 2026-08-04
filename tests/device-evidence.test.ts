@@ -178,9 +178,9 @@ type DeviceEvidenceValidator = {
     }
     package: {
       tag: string | null
-      version: string | null
+      version: string
       packageCommit: string | null
-      upstreamCommit: string | null
+      upstreamCommit: string
       signerFingerprint: string
       manifestMinimumStartos: string
       sdkVersion: string
@@ -412,6 +412,37 @@ function matrixFixture(
     .join('\n')
 }
 
+function canonicalMatrixStatuses(matrix: string): Array<{
+  gateId: string
+  acceptanceGate: string
+  x86_64: string
+  aarch64: string
+}> {
+  return matrix
+    .split('\n')
+    .filter((line) => /^\|\s*[A-Z]+-[0-9]{2}\s*\|/.test(line))
+    .map((line) => {
+      const columns = line.split('|').map((column) => column.trim())
+      return {
+        gateId: columns[1],
+        acceptanceGate: columns[2],
+        x86_64: columns[4],
+        aarch64: columns[5],
+      }
+    })
+}
+
+function markdownSection(document: string, heading: string): string {
+  const start = document.indexOf(heading)
+  assert.notEqual(start, -1, `missing section ${heading}`)
+  const headingPrefix = heading.slice(0, heading.indexOf(' ') + 1)
+  const nextHeading = document.indexOf(
+    `\n${headingPrefix}`,
+    start + heading.length,
+  )
+  return document.slice(start, nextHeading === -1 ? undefined : nextHeading)
+}
+
 function requirePassingAssertions(
   record: MutableEvidenceFixture,
   ids: string[],
@@ -481,15 +512,293 @@ test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async (
     'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
   )
   assert.equal(candidate.package.tag, null)
-  assert.equal(candidate.package.version, null)
+  assert.equal(
+    candidate.package.version,
+    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0',
+  )
   assert.equal(candidate.package.packageCommit, null)
-  assert.equal(candidate.package.upstreamCommit, null)
+  assert.equal(
+    candidate.package.upstreamCommit,
+    '651f6372754e60e3f936b3397040eb0f1e44c9f3',
+  )
   assert.equal(candidate.package.artifacts.x86_64.sha256, null)
+  assert.equal(candidate.package.artifacts.x86_64.sizeBytes, null)
   assert.equal(candidate.package.artifacts.aarch64.sha256, null)
+  assert.equal(candidate.package.artifacts.aarch64.sizeBytes, null)
   assert.equal(
     candidate.promotionControls.authenticatedOperatorReviewerBinding,
     'PENDING',
   )
+})
+
+for (const [field, expectedError] of [
+  ['version', 'candidate package version must identify the proposed version'],
+  [
+    'upstreamCommit',
+    'candidate upstream commit must identify the proposed source',
+  ],
+] as const) {
+  for (const state of ['UNFROZEN', 'FROZEN'] as const) {
+    test(`rejects a ${state} candidate without its proposed ${field}`, async (t) => {
+      const validator = await loadValidator()
+      const directory = await mkdtemp(join(tmpdir(), 'buzz-proposed-id-'))
+      t.after(() => rm(directory, { recursive: true, force: true }))
+      const source = state === 'UNFROZEN' ? candidatePath : frozenCandidatePath
+      const candidate = JSON.parse(
+        await readFile(source, 'utf8'),
+      ) as MutableCandidateContract
+      candidate.package[field] = null
+      const attemptedContract = join(directory, 'candidate.json')
+      await writeFile(attemptedContract, JSON.stringify(candidate))
+
+      await assert.rejects(
+        () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+        new RegExp(expectedError),
+      )
+    })
+  }
+}
+
+test('rejects malformed proposed identity values in both candidate states', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-proposed-malformed-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const mutations = [
+    [
+      'version-empty',
+      'version',
+      '',
+      'candidate package version must identify the proposed version',
+    ],
+    [
+      'version-whitespace',
+      'version',
+      '   ',
+      'candidate package version must identify the proposed version',
+    ],
+    [
+      'version-malformed',
+      'version',
+      'not-a-package-version',
+      'candidate package version must identify the proposed version',
+    ],
+    [
+      'version-wrong-type',
+      'version',
+      7,
+      'candidate package version must identify the proposed version',
+    ],
+    [
+      'upstream-empty',
+      'upstreamCommit',
+      '',
+      'candidate upstream commit must identify the proposed source',
+    ],
+    [
+      'upstream-whitespace',
+      'upstreamCommit',
+      '   ',
+      'candidate upstream commit must identify the proposed source',
+    ],
+    [
+      'upstream-malformed',
+      'upstreamCommit',
+      '651f637',
+      'candidate upstream commit must identify the proposed source',
+    ],
+    [
+      'upstream-wrong-type',
+      'upstreamCommit',
+      7,
+      'candidate upstream commit must identify the proposed source',
+    ],
+  ] as const
+
+  for (const state of ['UNFROZEN', 'FROZEN'] as const) {
+    for (const [label, field, value, expectedError] of mutations) {
+      const source = state === 'UNFROZEN' ? candidatePath : frozenCandidatePath
+      const candidate = JSON.parse(
+        await readFile(source, 'utf8'),
+      ) as MutableCandidateContract
+      candidate.package[field] = value
+      const attemptedContract = join(directory, `${state}-${label}.json`)
+      await writeFile(attemptedContract, JSON.stringify(candidate))
+
+      await assert.rejects(
+        () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+        new RegExp(expectedError),
+      )
+    }
+  }
+})
+
+test('rejects empty and whitespace StartOS build IDs on both architectures and candidate states', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-build-id-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+
+  for (const state of ['UNFROZEN', 'FROZEN'] as const) {
+    for (const architecture of ['x86_64', 'aarch64'] as const) {
+      for (const [label, value] of [
+        ['empty', ''],
+        ['whitespace', '   '],
+      ] as const) {
+        const source =
+          state === 'UNFROZEN' ? candidatePath : frozenCandidatePath
+        const candidate = JSON.parse(
+          await readFile(source, 'utf8'),
+        ) as MutableCandidateContract
+        candidate.startos.architectures[architecture].buildId = value
+        const attemptedContract = join(
+          directory,
+          `${state}-${architecture}-${label}.json`,
+        )
+        await writeFile(attemptedContract, JSON.stringify(candidate))
+
+        await assert.rejects(
+          () =>
+            validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+          new RegExp(`candidate StartOS ${architecture} buildId is invalid`),
+        )
+      }
+    }
+  }
+})
+
+for (const [label, setFrozenValue] of [
+  [
+    'candidate tag',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.tag = 'v0.2.0_0'
+    },
+  ],
+  [
+    'package commit',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.packageCommit = 'a'.repeat(40)
+    },
+  ],
+  [
+    'x86_64 artifact hash',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.x86_64.sha256 = 'a'.repeat(64)
+    },
+  ],
+  [
+    'x86_64 artifact size',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.x86_64.sizeBytes = 1
+    },
+  ],
+  [
+    'aarch64 artifact hash',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.aarch64.sha256 = 'a'.repeat(64)
+    },
+  ],
+  [
+    'aarch64 artifact size',
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.aarch64.sizeBytes = 1
+    },
+  ],
+  [
+    'x86_64 StartOS build ID',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.x86_64.buildId = 'fixture-build'
+    },
+  ],
+  [
+    'x86_64 StartOS image hash',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.x86_64.imageSha256 = 'a'.repeat(64)
+    },
+  ],
+  [
+    'aarch64 StartOS build ID',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.aarch64.buildId = 'fixture-build'
+    },
+  ],
+  [
+    'aarch64 StartOS image hash',
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.aarch64.imageSha256 = 'a'.repeat(64)
+    },
+  ],
+] as const) {
+  test(`rejects an UNFROZEN candidate with a frozen-only ${label}`, async (t) => {
+    const validator = await loadValidator()
+    const directory = await mkdtemp(join(tmpdir(), 'buzz-frozen-only-'))
+    t.after(() => rm(directory, { recursive: true, force: true }))
+    const candidate = JSON.parse(
+      await readFile(candidatePath, 'utf8'),
+    ) as MutableCandidateContract
+    candidate.package.version =
+      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0'
+    candidate.package.upstreamCommit =
+      '651f6372754e60e3f936b3397040eb0f1e44c9f3'
+    setFrozenValue(candidate)
+    const attemptedContract = join(directory, 'candidate.json')
+    await writeFile(attemptedContract, JSON.stringify(candidate))
+
+    await assert.rejects(
+      () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+      /UNFROZEN candidate identity must not contain frozen values/,
+    )
+  })
+}
+
+test('requires every frozen-only identity before a candidate can be FROZEN', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-frozen-complete-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const omissions = [
+    (candidate: MutableCandidateContract) => {
+      candidate.package.tag = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.package.packageCommit = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.x86_64.sha256 = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.x86_64.sizeBytes = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.aarch64.sha256 = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.package.artifacts.aarch64.sizeBytes = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.x86_64.buildId = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.x86_64.imageSha256 = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.aarch64.buildId = null
+    },
+    (candidate: MutableCandidateContract) => {
+      candidate.startos.architectures.aarch64.imageSha256 = null
+    },
+  ]
+
+  for (const [index, omit] of omissions.entries()) {
+    const candidate = JSON.parse(
+      await readFile(frozenCandidatePath, 'utf8'),
+    ) as MutableCandidateContract
+    omit(candidate)
+    const attemptedContract = join(directory, `candidate-${index}.json`)
+    await writeFile(attemptedContract, JSON.stringify(candidate))
+
+    await assert.rejects(
+      () => validator.loadCandidateContract(pathToFileURL(attemptedContract)),
+      /FROZEN candidate identity must be complete/,
+    )
+  }
 })
 
 test('rejects a manually asserted authenticated-review enforcement flag', async (t) => {
@@ -1537,7 +1846,17 @@ test('validates the template and keeps all 46 production cells NOT RUN', async (
   assert.deepEqual(result, { valid: true, errors: [], matrixCells: 46 })
 
   const matrix = await readFile(matrixPath, 'utf8')
-  assert.equal(matrix.match(/\bNOT RUN\b/g)?.length, 46)
+  const statuses = canonicalMatrixStatuses(matrix)
+  assert.deepEqual(
+    statuses.map(({ gateId }) => gateId),
+    gateIds,
+  )
+  assert.equal(statuses.length, 23)
+  for (const status of statuses) {
+    assert.equal(status.x86_64, 'NOT RUN', `${status.gateId}/x86_64`)
+    assert.equal(status.aarch64, 'NOT RUN', `${status.gateId}/aarch64`)
+  }
+  assert.equal(statuses.length * 2, 46)
   assert.doesNotMatch(matrix, /\[(?:PASS|FAIL|BLOCKED)\]\(/)
 })
 
@@ -1864,9 +2183,47 @@ test('exposes a strict release-only device promotion command', async () => {
 })
 
 test('documents the ordered stable StartOS production run', async () => {
-  const runbook = await readFile(
-    repositoryFile('docs/testing/DEVICE_TEST_RUNBOOK.md'),
-    'utf8',
+  const [matrix, runbook] = await Promise.all([
+    readFile(repositoryFile('docs/testing/DEVICE_TEST_MATRIX.md'), 'utf8'),
+    readFile(repositoryFile('docs/testing/DEVICE_TEST_RUNBOOK.md'), 'utf8'),
+  ])
+
+  for (const document of [matrix, runbook]) {
+    assert.match(document, /SECURITY-BLOCKED[\s\S]{0,120}NO-GO/i)
+    assert.match(document, /preparatory[\s\S]{0,120}non-final/i)
+    assert.match(document, /rebuild[\s\S]{0,120}final tracked commit/i)
+    assert.match(
+      document,
+      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:0/,
+    )
+    assert.match(document, /651f6372754e60e3f936b3397040eb0f1e44c9f3/)
+    assert.match(document, /Community Registry beta/i)
+    assert.match(document, /clean install/i)
+    assert.match(document, /initial setup/i)
+    assert.match(document, /UI access/i)
+    assert.match(document, /health/i)
+    assert.match(document, /relay\s+round\s+trip/i)
+    assert.match(document, /Desktop.*ACP/i)
+    assert.match(document, /pairing QR/i)
+    assert.match(document, /uninstall.*reinstall/i)
+    assert.match(document, /all 46/i)
+    assert.match(document, /backup.*restore/i)
+    assert.match(document, /cross-architecture restore/i)
+    assert.match(document, /24-hour.*soak/i)
+    assert.match(document, /independent review/i)
+  }
+
+  const statuses = canonicalMatrixStatuses(matrix)
+  assert.deepEqual(
+    statuses.map(({ gateId }) => gateId),
+    gateIds,
+  )
+  assert.equal(statuses.length, 23)
+  assert.equal(
+    statuses.filter(
+      ({ x86_64, aarch64 }) => x86_64 === 'NOT RUN' && aarch64 === 'NOT RUN',
+    ).length * 2,
+    46,
   )
 
   assert.match(runbook, /official\s+stable StartOS `0\.4\.0`/)
@@ -1911,6 +2268,93 @@ test('documents the ordered stable StartOS production run', async () => {
     const index = runbook.indexOf(`### ${gateId}`)
     assert.ok(index > previousIndex, `${gateId} must appear in canonical order`)
     previousIndex = index
+  }
+})
+
+test('binds formal beta UPG-01 to the published candidate source and separates the local x86 preflight', async () => {
+  const validator = await loadValidator()
+  const candidate = await validator.loadCandidateContract(candidatePath)
+  const [matrix, runbook] = await Promise.all([
+    readFile(repositoryFile('docs/testing/DEVICE_TEST_MATRIX.md'), 'utf8'),
+    readFile(repositoryFile('docs/testing/DEVICE_TEST_RUNBOOK.md'), 'utf8'),
+  ])
+  const expectedPublishedSource = {
+    tag: 'v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2',
+    version: '0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2',
+    packageCommit: '0103ba850c08ae84cca5c623ea76c855d7a7f1a4',
+    upstreamCommit: 'dd222a509b156ba52ed3219e895d7bf1cf322c92',
+    signerFingerprint:
+      'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
+    artifacts: {
+      x86_64: {
+        name: 'buzz_x86_64.s9pk',
+        sha256:
+          '8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2',
+      },
+      aarch64: {
+        name: 'buzz_aarch64.s9pk',
+        sha256:
+          '72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638',
+      },
+    },
+  }
+  assert.deepEqual(candidate.upgradeSource, expectedPublishedSource)
+
+  const publishedValues = [
+    expectedPublishedSource.tag,
+    expectedPublishedSource.version,
+    expectedPublishedSource.packageCommit,
+    expectedPublishedSource.upstreamCommit,
+    expectedPublishedSource.signerFingerprint,
+    expectedPublishedSource.artifacts.x86_64.sha256,
+    expectedPublishedSource.artifacts.aarch64.sha256,
+  ]
+  const formalBetaSections = [
+    markdownSection(matrix, '## Community Registry Beta Minimum'),
+    markdownSection(runbook, '## Community Registry Beta Minimum'),
+  ]
+  for (const section of formalBetaSections) {
+    assert.match(section, /UPG-01/)
+    assert.doesNotMatch(section, /63496\.cc:2/)
+    for (const value of publishedValues) {
+      assert.ok(section.includes(value), `formal beta source missing ${value}`)
+    }
+  }
+
+  const formalUpgradeSection = markdownSection(runbook, '### UPG-01')
+  for (const value of publishedValues) {
+    assert.ok(formalUpgradeSection.includes(value), `UPG-01 missing ${value}`)
+  }
+  const matrixUpgrade = canonicalMatrixStatuses(matrix).find(
+    ({ gateId }) => gateId === 'UPG-01',
+  )
+  assert.ok(matrixUpgrade)
+  assert.match(matrixUpgrade.acceptanceGate, /Published `dd222a5:2` release/)
+
+  for (const document of [matrix, runbook]) {
+    const localPreflight = markdownSection(
+      document,
+      '## Operator-Specific Local x86_64 Transition Preflight',
+    )
+    for (const value of [
+      '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2',
+      '2ae96a9aa150d3fd50a19eaf5fa30a81b452c9e4',
+      '63496cc1d4c6f1b7c613801bdcc694169dcf391a',
+      'acc6224859b5fc4c945ab43d3a81ea961938459262616650bcd31851b8133b4e',
+    ]) {
+      assert.ok(
+        localPreflight.includes(value),
+        `local preflight missing ${value}`,
+      )
+    }
+    assert.match(localPreflight, /not published/i)
+    assert.match(localPreflight, /no[\s\S]{0,100}(?:aarch64|arm64).*artifact/i)
+    assert.match(localPreflight, /outside[\s\S]{0,100}46-cell.*matrix/i)
+    assert.match(
+      localPreflight,
+      /cannot count[\s\S]{0,100}Community Registry[\s\S]{0,40}beta/i,
+    )
+    assert.match(localPreflight, /cannot count[\s\S]{0,120}production/i)
   }
 })
 

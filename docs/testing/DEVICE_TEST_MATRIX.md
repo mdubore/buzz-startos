@@ -6,29 +6,91 @@ official stable StartOS `0.4.0` release and an exact build identifier. The
 manifest value `0.4.0-beta.10` is the SDK compatibility floor; it is not the
 tested device version or a substitute for device evidence.
 
+The staged candidate is **SECURITY-BLOCKED** and therefore **NO-GO** for both
+Community Registry beta submission and production promotion. It remains
+`UNFROZEN`; no row below has been executed and all 46 device cells remain
+unexecuted.
+
 ## Candidate Identity
 
-[`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is authoritative. Task 9
-freezes its package, per-architecture artifact, and per-architecture StartOS
-image values before any device run. Every evidence record must exactly match
-that contract.
+[`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is authoritative. It records
+the reviewed proposed package version and upstream source while leaving the
+candidate tag, package commit, per-architecture artifact, and per-architecture
+StartOS image identities null. Those frozen-only values cannot be recorded
+until the security gate clears and the final tracked commit exists. Every later
+evidence record must exactly match the resulting frozen contract.
 
-| Field                | Required value                                                            |
-| -------------------- | ------------------------------------------------------------------------- |
-| Candidate tag        | Pending immutable candidate tag                                           |
-| Package version      | Pending version matching the tag                                          |
-| Package commit       | Pending full 40-character commit                                          |
-| Upstream Buzz commit | Pending reviewed full 40-character commit                                 |
-| Release signer       | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
-| x86_64 artifact      | Pending `buzz_x86_64.s9pk` size and SHA-256                               |
-| aarch64 artifact     | Pending `buzz_aarch64.s9pk` size and SHA-256                              |
-| StartOS source       | `start-os/v0.4.0` at `514af0c2fa076c8b597d9861f882bdb1b3411d9e`          |
-| StartOS images       | Pending observed x86_64 and aarch64 build IDs and image SHA-256 hashes    |
+| Field                     | Required value                                                            |
+| ------------------------- | ------------------------------------------------------------------------- |
+| Candidate state           | `UNFROZEN` — `SECURITY-BLOCKED` / `NO-GO`                                 |
+| Candidate tag             | Null until final freeze                                                   |
+| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0`                      |
+| Package commit            | Null until final freeze                                                   |
+| Upstream Buzz commit      | `651f6372754e60e3f936b3397040eb0f1e44c9f3`                                |
+| Release signer            | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
+| x86_64 final artifact     | Null size and SHA-256 until final freeze                                  |
+| aarch64 final artifact    | Null size and SHA-256 until final freeze                                  |
+| StartOS source            | `start-os/v0.4.0` at `514af0c2fa076c8b597d9861f882bdb1b3411d9e`           |
+| StartOS device identities | Null x86_64/aarch64 build IDs and image hashes until observed             |
+
+The ignored `buzz_x86_64.s9pk`, `buzz_aarch64.s9pk`, and `SHA256SUMS` files are
+preparatory and non-final. Tasks 8 and 9 change tracked package bytes, so rebuild
+the artifacts after the final tracked commit and after the security gates clear.
+Do not copy their present hashes, sizes, or commitments into the candidate.
 
 Changing a package, image, source, version, signature, or archive byte creates a
 new candidate and resets every result. Evidence may be committed after the
 candidate tag, but the tested tag must not move and its assets must not be
 rebuilt or replaced.
+
+## Community Registry Beta Minimum
+
+Security remediation and a passing final scan are prerequisites. After that,
+the minimum Community Registry beta device gate requires independently reviewed
+real-device evidence on both native x86_64 and native aarch64 for each of these
+outcomes:
+
+1. Final artifact checksum, signer, manifest, commitment, and native image
+   architecture.
+2. Clean install and the expected pre-setup startup block.
+3. Complete Initial Setup and Configure Pairing Relay initial setup tasks.
+4. UI access through the canonical StartOS address and healthy service state.
+5. An authenticated main-relay WebSocket event publish/query relay round trip.
+6. Buzz Desktop and ACP connectivity to the main WSS endpoint.
+7. Pairing QR generation through the dedicated pairing WSS endpoint.
+8. Complete formal `UPG-01` from the exact published cross-architecture source
+   recorded in `DEVICE_CANDIDATE.json`, preserving state and returning both
+   interfaces to health:
+   - tag `v0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5_2`
+   - version `0.2.0-main.20260726.h.7.m.57.s.31.sha.dd.222.a.5:2`
+   - package commit `0103ba850c08ae84cca5c623ea76c855d7a7f1a4`
+   - upstream commit `dd222a509b156ba52ed3219e895d7bf1cf322c92`
+   - signer `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c`
+   - x86_64 SHA-256
+     `8d149d724809f74354c7d905ec5c0dfd9e26db08cddb0f1b0ea5eb75a02ce0a2`
+   - aarch64 SHA-256
+     `72e4e73e413df327af11eba48c4808b1e011729c3a1f6113d25a6c63138c2638`
+9. Hard uninstall and clean reinstall, including fresh initial-setup state.
+
+Automated, static, image, or host-only checks cannot complete these device
+outcomes. They all remain unperformed for this candidate.
+
+## Operator-Specific Local x86_64 Transition Preflight
+
+The operator also has one independently inspected local x86_64 sideload archive
+for the actual alpha-test transition path:
+
+- version `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2`
+- package commit `2ae96a9aa150d3fd50a19eaf5fa30a81b452c9e4`
+- upstream commit `63496cc1d4c6f1b7c613801bdcc694169dcf391a`
+- x86_64 archive SHA-256
+  `acc6224859b5fc4c945ab43d3a81ea961938459262616650bcd31851b8133b4e`
+
+This archive is not published and has no immutable release tag or corresponding
+aarch64 artifact. Testing its x86_64 transition is an operator preflight outside
+the signed 46-cell evidence matrix. It cannot count toward Community Registry
+beta or production readiness, cannot complete `UPG-01`, and must not create a
+matrix `PASS`. Keep any result as separate local operator notes.
 
 ## Status Format
 
@@ -62,7 +124,7 @@ The gate order and assertion identifiers are canonical in
 | HLT-03  | Redis failure and recovery                                               | BKP-01                             | NOT RUN | NOT RUN | `redis.*`                    |
 | REC-01  | Canonical-address loss, blocking task, and recovery                      | BKP-01                             | NOT RUN | NOT RUN | `canonical-url.*`            |
 | REC-02  | Malformed wrapper state, fail-closed backup, and restore recovery        | BKP-01                             | NOT RUN | NOT RUN | `stable-state.*`             |
-| UPG-01  | Published revision `:2` to candidate update                              | ART-01                             | NOT RUN | NOT RUN | `upgrade.*`                  |
+| UPG-01  | Published `dd222a5:2` release to candidate update                        | ART-01                             | NOT RUN | NOT RUN | `upgrade.*`                  |
 | RES-01  | Production resource profile and 24-hour physical-device soak             | BKP-01, UPG-01                     | NOT RUN | NOT RUN | `resources.*`                |
 | LIF-01  | Hard uninstall and clean reinstall                                       | All destructive and resource gates | NOT RUN | NOT RUN | `uninstall.*`, `reinstall.*` |
 
@@ -89,10 +151,12 @@ restore error argv/log output.
 
 ## Production Exit
 
-Promotion requires valid linked evidence in all 46 cells, identical release
-identity across those records, no open high or critical issue, successful
-pre-upgrade audits, physical-device resource reports, and independent approval.
-The immutable assets tested here are the only assets that may be promoted. Run
+Production promotion requires valid linked evidence in all 46 cells, identical
+release identity across those records, no open high or critical issue, and
+successful pre-upgrade audits. It also requires same-architecture backup and
+restore, both directions of cross-architecture restore, both physical-device
+24-hour resource soaks, and independent review of every record. The immutable
+assets tested here are the only assets that may be promoted. Run
 `npm run verify:device-promotion` for the strict check. Promotion remains
 disabled until a protected evidence workflow provides machine-verifiable
 authenticated operator/reviewer binding.

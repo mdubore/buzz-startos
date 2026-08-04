@@ -19,9 +19,9 @@
   },
   "package": {
     "tag": null,
-    "version": null,
+    "version": "0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0",
     "packageCommit": null,
-    "upstreamCommit": null,
+    "upstreamCommit": "651f6372754e60e3f936b3397040eb0f1e44c9f3",
     "signerFingerprint": "sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c",
     "manifestMinimumStartos": "0.4.0-beta.10",
     "sdkVersion": "2.0.9",
