@@ -1,5 +1,13 @@
 # Remaining Release Work
 
+- [ ] Resolve the `651f637` security gate before Community Registry
+      submission. Replace or rebuild the Buzz, MinIO, and MinIO Client images
+      so a new ten-native-manifest scan has no critical findings; resolve the
+      Buzz `CVE-2026-53613` and `CVE-2026-53615` unknown-severity results; and
+      update the development dependency lock from vulnerable
+      `fast-uri@3.1.4` to a reviewed fixed version. Do not waive a critical or
+      unknown-severity finding. See
+      [`docs/security/651f637-runtime-scan.md`](docs/security/651f637-runtime-scan.md).
 - [ ] Validate a live StartOS update from
       `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:1` to the current `:2`
       revision. Confirm the no-op forward migration preserves state, both
