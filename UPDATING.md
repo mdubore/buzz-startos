@@ -31,8 +31,10 @@ Its upstream portion is the exact official Buzz snapshot
 runtime-image security rebuild of that snapshot. The candidate retains the
 production-readiness controls, disposable Git-cache repair, and dedicated
 LAN-only pairing relay. The dependency and ten-manifest OCI gates pass for the
-r2 runtime, but final signed packages have not been frozen and live
-StartOS/device validation remains incomplete. The current evidence is in
+r2 runtime. Exact signed x86_64 and aarch64 packages from commit
+`0021af0a5b151b24701ed4a7f68c131a69156c32` are frozen in
+`docs/testing/DEVICE_CANDIDATE.json`; live StartOS/device validation remains
+incomplete. The current security evidence is in
 `docs/security/651f637-startos-r2-runtime-scan.md`.
 
 The candidate's immutable Buzz image pins are:

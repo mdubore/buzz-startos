@@ -7,36 +7,34 @@ manifest value `0.4.0-beta.10` is the SDK compatibility floor; it is not the
 tested device version or a substitute for device evidence.
 
 The staged candidate is **AUTOMATION-CLEAR** but remains **NO-GO** for both
-Community Registry beta submission and production promotion until its signed
-artifacts are frozen and the required device gates pass. It remains `UNFROZEN`;
-no row below has been executed and all 46 device cells remain unexecuted.
+Community Registry beta submission and production promotion until the required
+device gates pass. Its exact signed native artifacts are `FROZEN`; no row below
+has been executed and all 46 device cells remain unexecuted.
 
 ## Candidate Identity
 
 [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is authoritative. It records
-the reviewed proposed package version and upstream source while leaving the
-candidate tag, package commit, per-architecture artifact, and per-architecture
-StartOS image identities null. Those frozen-only values cannot be recorded
-until the final tracked commit and signed artifacts exist. Every later
-evidence record must exactly match the resulting frozen contract.
+the reviewed package version, upstream source, package commit, tag, signer, and
+exact per-architecture archive identities. StartOS image identities remain null
+until observed on the real devices. Every later evidence record must exactly
+match the frozen package contract and record its observed StartOS identity.
 
 | Field                     | Required value                                                            |
 | ------------------------- | ------------------------------------------------------------------------- |
-| Candidate state           | `UNFROZEN` — `AUTOMATION-CLEAR` / `NO-GO`                                 |
-| Candidate tag             | Null until final freeze                                                   |
+| Candidate state           | `FROZEN` — `AUTOMATION-CLEAR` / `NO-GO`                                   |
+| Candidate tag             | `v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2`                     |
 | Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2`                      |
-| Package commit            | Null until final freeze                                                   |
+| Package commit            | `0021af0a5b151b24701ed4a7f68c131a69156c32`                                |
 | Upstream Buzz commit      | `651f6372754e60e3f936b3397040eb0f1e44c9f3`                                |
 | Release signer            | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
-| x86_64 final artifact     | Null size and SHA-256 until final freeze                                  |
-| aarch64 final artifact    | Null size and SHA-256 until final freeze                                  |
+| x86_64 final artifact     | 189,480,673 bytes; `fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d` |
+| aarch64 final artifact    | 175,124,200 bytes; `cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086` |
 | StartOS source            | `start-os/v0.4.0` at `514af0c2fa076c8b597d9861f882bdb1b3411d9e`           |
 | StartOS device identities | Null x86_64/aarch64 build IDs and image hashes until observed             |
 
-The ignored `buzz_x86_64.s9pk`, `buzz_aarch64.s9pk`, and `SHA256SUMS` files are
-preparatory and non-final. Rebuild the artifacts after the final tracked commit
-and before freezing the candidate.
-Do not copy their present hashes, sizes, or commitments into the candidate.
+The ignored build outputs named above are the exact frozen archives only when
+their sizes and hashes match this table. Do not rebuild or replace them during
+device testing.
 
 Changing a package, image, source, version, signature, or archive byte creates a
 new candidate and resets every result. Evidence may be committed after the

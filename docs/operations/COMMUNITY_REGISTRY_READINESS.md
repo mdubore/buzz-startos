@@ -6,11 +6,11 @@ Date: 2026-08-04
 
 | Promotion boundary | Decision | Current reason |
 | --- | --- | --- |
-| Start9 Community Registry beta | **NO-GO** | Automated package and runtime-security gates pass, but final signed artifacts are not frozen and the required native StartOS beta device checks are unperformed. |
+| Start9 Community Registry beta | **NO-GO** | Automated package, runtime-security, and signed-artifact gates pass, but the required native StartOS beta device checks are unperformed. |
 | Start9 Community Registry production | **NO-GO** | The candidate is not beta-qualified and all 46 production device cells remain `NOT RUN`. |
 
-The candidate is **AUTOMATION-CLEAR** and staged for artifact freeze/device
-testing. This status does not turn source, container, or host-only checks into
+The candidate is **AUTOMATION-CLEAR**, `FROZEN`, and staged for device testing.
+This status does not turn source, container, or host-only checks into
 StartOS device evidence and does not authorize a registry submission.
 
 ## Candidate Identity
@@ -19,17 +19,17 @@ StartOS device evidence and does not authorize a registry submission.
 | --- | --- |
 | Package version | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2` |
 | Upstream Buzz | `desktop-v0.5.4`, commit `651f6372754e60e3f936b3397040eb0f1e44c9f3` |
-| Candidate state | `UNFROZEN` |
-| Candidate tag/commit | Not selected; machine-readable fields remain `null` |
-| Final x86_64/aarch64 archives | Not built from the final freeze commit |
+| Candidate state | `FROZEN` |
+| Candidate tag/commit | `v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2` / `0021af0a5b151b24701ed4a7f68c131a69156c32` |
+| Final x86_64 archive | 189,480,673 bytes; SHA-256 `fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d` |
+| Final aarch64 archive | 175,124,200 bytes; SHA-256 `cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086` |
 | Release signer | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
 | Minimum manifest StartOS | `0.4.0-beta.10` compatibility floor, not test evidence |
 
-The proposed identity is authoritative in
-[`DEVICE_CANDIDATE.json`](../testing/DEVICE_CANDIDATE.json). Final tag, package
-commit, hashes, and sizes must remain null until the tracked release source is
-complete and both signed archives are built and inspected from that exact
-commit.
+The frozen identity is authoritative in
+[`DEVICE_CANDIDATE.json`](../testing/DEVICE_CANDIDATE.json). Its tag, package
+commit, signer, hashes, and sizes identify the only bytes eligible for this
+device run.
 
 ## Cleared Automated Gates
 
@@ -43,9 +43,10 @@ commit.
   complete test suite pass; and
 - `npm run verify:images` confirms every recorded index and native manifest.
 
-The package gate will be run once more from the final clean freeze commit before
-packing. A passing automated gate does not prove installation or service
-behavior on StartOS.
+The final clean source gate passed before packing. Both native manifests bind
+the exact package commit, version, SDK, and native architecture, and both
+archive signers match the reviewed key. A passing automated or artifact gate
+does not prove installation or service behavior on StartOS.
 
 ### Rebuilt Runtime Images
 
@@ -105,21 +106,14 @@ substitute for that device evidence.
 
 ## Remaining Community Registry Beta Work
 
-1. Complete one final clean package gate on the tracked release source.
-2. Select the immutable package commit and version-derived tag.
-3. Build signed x86_64 and aarch64 archives from that exact commit; inspect each
-   manifest and commitment; verify signer, native architecture, embedded image
-   pins, package Git hash, size, and SHA-256.
-4. Freeze those exact package identities in `DEVICE_CANDIDATE.json`. StartOS
-   build/image identities remain null until observed on the test devices.
-5. Run the minimum beta matrix on official stable StartOS for both native
+1. Run the minimum beta matrix on official stable StartOS for both native
    architectures: artifact verification, clean install, pre-setup block,
    initial/pairing setup, UI and both health checks, authenticated relay round
    trip, Desktop WSS, ACP WSS, pairing QR, formal published-source upgrade,
    hard uninstall, and clean reinstall.
-6. Obtain independent review of the exact frozen artifacts and returned device
+2. Obtain independent review of the exact frozen artifacts and returned device
    evidence.
-7. Only after those steps pass, manually email the public repository to
+3. Only after those steps pass, manually email the public repository to
    `submissions@start9.com`, address review in the resulting
    `Start9-Community` fork, and test the immutable `community-beta` build.
 

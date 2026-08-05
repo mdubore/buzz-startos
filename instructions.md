@@ -4,10 +4,10 @@ Your first setup choice is permanent: the selected StartOS URL identifies this
 Buzz community and is used for authentication, media, and Git links.
 
 > [!WARNING]
-> This package is a device-test candidate. Its automated dependency, image,
-> and package-source gates pass, but its final signed artifacts and StartOS
-> device tests are not complete. Do not use it for production or make it the
-> only copy of irreplaceable data.
+> This package is a frozen device-test candidate. Its automated dependency,
+> image, package-source, and signed-artifact gates pass, but its StartOS device
+> tests are not complete. Do not use it for production or make it the only copy
+> of irreplaceable data.
 
 ## Documentation
 

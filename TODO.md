@@ -5,18 +5,10 @@ and ten-manifest OCI gates pass for package revision `651f637:2`. Current exact
 evidence is indexed by [`docs/EVIDENCE.md`](docs/EVIDENCE.md); the current
 decision is in
 [`COMMUNITY_REGISTRY_READINESS.md`](docs/operations/COMMUNITY_REGISTRY_READINESS.md).
+The exact frozen package identity is in
+[`DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json).
 
 ## Community Registry Beta
-
-- [ ] Run the final clean package gate and select the immutable tracked package
-      commit and version-derived tag.
-- [ ] Build and inspect signed native x86_64 and aarch64 artifacts from that
-      exact commit. Verify their SHA-256 hashes, sizes, signer, manifests,
-      commitments, embedded image pins, native-only architecture contents, and
-      exact package Git hash.
-- [ ] Freeze those package identities in
-      [`DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json). Leave
-      StartOS build/image fields null until observed during device testing.
 - [ ] Perform clean installs on real x86_64 and aarch64 stable StartOS devices.
       Complete initial and pairing setup, start all daemons, and confirm UI
       access, both exported relay interfaces, both health checks, and an

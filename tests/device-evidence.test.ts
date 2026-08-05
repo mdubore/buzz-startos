@@ -472,6 +472,21 @@ function upgradeSourceFor(
   }
 }
 
+function makeUnfrozenCandidate(
+  candidate: MutableCandidateContract,
+): MutableCandidateContract {
+  candidate.state = 'UNFROZEN'
+  candidate.package.tag = null
+  candidate.package.packageCommit = null
+  for (const architecture of ['x86_64', 'aarch64'] as const) {
+    candidate.package.artifacts[architecture].sha256 = null
+    candidate.package.artifacts[architecture].sizeBytes = null
+    candidate.startos.architectures[architecture].buildId = null
+    candidate.startos.architectures[architecture].imageSha256 = null
+  }
+  return candidate
+}
+
 async function loadValidator(): Promise<DeviceEvidenceValidator> {
   let loaded: DeviceEvidenceValidator | undefined
   let failure: unknown
@@ -490,12 +505,12 @@ async function loadValidator(): Promise<DeviceEvidenceValidator> {
   return loaded
 }
 
-test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async () => {
+test('binds the frozen native artifacts while deferring observed StartOS identities', async () => {
   const validator = await loadValidator()
   const candidate = await validator.loadCandidateContract(candidatePath)
 
   assert.equal(candidate.schemaVersion, 1)
-  assert.equal(candidate.state, 'UNFROZEN')
+  assert.equal(candidate.state, 'FROZEN')
   assert.deepEqual(candidate.startos, {
     releaseLine: '0.4.0',
     releaseTag: 'start-os/v0.4.0',
@@ -511,20 +526,36 @@ test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async (
     candidate.package.signerFingerprint,
     'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
   )
-  assert.equal(candidate.package.tag, null)
+  assert.equal(
+    candidate.package.tag,
+    'v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2',
+  )
   assert.equal(
     candidate.package.version,
     '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2',
   )
-  assert.equal(candidate.package.packageCommit, null)
+  assert.equal(
+    candidate.package.packageCommit,
+    '0021af0a5b151b24701ed4a7f68c131a69156c32',
+  )
   assert.equal(
     candidate.package.upstreamCommit,
     '651f6372754e60e3f936b3397040eb0f1e44c9f3',
   )
-  assert.equal(candidate.package.artifacts.x86_64.sha256, null)
-  assert.equal(candidate.package.artifacts.x86_64.sizeBytes, null)
-  assert.equal(candidate.package.artifacts.aarch64.sha256, null)
-  assert.equal(candidate.package.artifacts.aarch64.sizeBytes, null)
+  assert.deepEqual(candidate.package.artifacts, {
+    x86_64: {
+      name: 'buzz_x86_64.s9pk',
+      sha256:
+        'fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d',
+      sizeBytes: 189480673,
+    },
+    aarch64: {
+      name: 'buzz_aarch64.s9pk',
+      sha256:
+        'cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086',
+      sizeBytes: 175124200,
+    },
+  })
   assert.equal(
     candidate.promotionControls.authenticatedOperatorReviewerBinding,
     'PENDING',
@@ -731,9 +762,11 @@ for (const [label, setFrozenValue] of [
     const validator = await loadValidator()
     const directory = await mkdtemp(join(tmpdir(), 'buzz-frozen-only-'))
     t.after(() => rm(directory, { recursive: true, force: true }))
-    const candidate = JSON.parse(
-      await readFile(candidatePath, 'utf8'),
-    ) as MutableCandidateContract
+    const candidate = makeUnfrozenCandidate(
+      JSON.parse(
+        await readFile(candidatePath, 'utf8'),
+      ) as MutableCandidateContract,
+    )
     candidate.package.version =
       '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2'
     candidate.package.upstreamCommit =
@@ -954,12 +987,21 @@ test('accepts a complete independently reviewed stable StartOS record', async ()
   assert.deepEqual(result, { valid: true, errors: [] })
 })
 
-test('rejects production evidence while the repository candidate is unfrozen', async () => {
+test('rejects production evidence when a candidate contract is unfrozen', async (t) => {
   const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-unfrozen-evidence-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const candidate = makeUnfrozenCandidate(
+    JSON.parse(
+      await readFile(candidatePath, 'utf8'),
+    ) as MutableCandidateContract,
+  )
+  const unfrozenCandidatePath = join(directory, 'candidate.json')
+  await writeFile(unfrozenCandidatePath, JSON.stringify(candidate))
   const result = await validator.validateEvidenceFile(
     fixture('valid-artifact.json'),
     schemaPath,
-    { candidatePath },
+    { candidatePath: pathToFileURL(unfrozenCandidatePath) },
   )
 
   assert.equal(result.valid, false)
@@ -2077,10 +2119,19 @@ test('rejects a passed gate whose dependency has not passed', async (t) => {
   )
 })
 
-test('promotion rejects the unfrozen 46-cell template', async () => {
+test('promotion rejects an unfrozen 46-cell template', async (t) => {
   const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-unfrozen-promotion-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const candidate = makeUnfrozenCandidate(
+    JSON.parse(
+      await readFile(candidatePath, 'utf8'),
+    ) as MutableCandidateContract,
+  )
+  const unfrozenCandidatePath = join(directory, 'candidate.json')
+  await writeFile(unfrozenCandidatePath, JSON.stringify(candidate))
   const result = await validator.validateRepository({
-    candidatePath,
+    candidatePath: pathToFileURL(unfrozenCandidatePath),
     catalogPath,
     examplePath,
     matrixPath,
@@ -2216,8 +2267,16 @@ test('documents the ordered stable StartOS production run', async () => {
 
   for (const document of [matrix, runbook]) {
     assert.match(document, /AUTOMATION-CLEAR[\s\S]{0,120}NO-GO/i)
-    assert.match(document, /preparatory[\s\S]{0,120}non-final/i)
-    assert.match(document, /rebuild[\s\S]{0,120}final tracked commit/i)
+    assert.match(document, /FROZEN/i)
+    assert.match(document, /0021af0a5b151b24701ed4a7f68c131a69156c32/)
+    assert.match(
+      document,
+      /fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d/,
+    )
+    assert.match(
+      document,
+      /cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086/,
+    )
     assert.match(
       document,
       /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:2/,
