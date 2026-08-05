@@ -1,0 +1,231 @@
+name: Runtime Images
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: runtime-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/mdubore/buzz-startos
+
+jobs:
+  build-native:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Build ${{ matrix.image.name }} (${{ matrix.architecture.name }})
+    runs-on: ${{ matrix.architecture.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture:
+          - name: amd64
+            runner: ubuntu-24.04
+            platform: linux/amd64
+            expected_uname: x86_64
+          - name: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            expected_uname: aarch64
+        image:
+          - name: buzz
+            source: buzz
+          - name: minio
+            source: minio
+          - name: mc
+            source: mc
+    steps:
+      - name: Check out reviewed package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prove native runner architecture
+        env:
+          EXPECTED_UNAME: ${{ matrix.architecture.expected_uname }}
+        run: test "$(uname -m)" = "$EXPECTED_UNAME"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Prepare exact reviewed source
+        run: |
+          ./scripts/prepare-runtime-image-source.sh "${{ matrix.image.source }}" \
+            "$RUNNER_TEMP/${{ matrix.image.source }}-source"
+
+      - name: Build and push native digest
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: ${{ runner.temp }}/${{ matrix.image.source }}-source
+          file: ${{ github.workspace }}/images/${{ matrix.image.source }}/Dockerfile
+          platforms: ${{ matrix.architecture.platform }}
+          outputs: >-
+            type=image,name=${{ env.REGISTRY }}/${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+
+      - name: Smoke-test the native digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_NAME: ${{ matrix.image.name }}
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ matrix.image.name }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker pull "$IMAGE_REF@$DIGEST"
+          case "$IMAGE_NAME" in
+            buzz)
+              docker run --rm --entrypoint /bin/sh "$IMAGE_REF@$DIGEST" -ec '
+                test "$(id -u)" = 1000
+                test -x /usr/local/bin/buzz-relay
+                test -x /usr/local/bin/buzz-admin
+                test -x /usr/local/bin/buzz-pair-relay
+                test -d /data/git
+                buzz-admin migrate --help >/dev/null
+              '
+              ;;
+            minio)
+              OUTPUT="$(docker run --rm "$IMAGE_REF@$DIGEST" --version)"
+              grep -F 'RELEASE.2025-10-15T17-29-55Z' <<<"$OUTPUT"
+              grep -F '9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a' <<<"$OUTPUT"
+              ;;
+            mc)
+              OUTPUT="$(docker run --rm "$IMAGE_REF@$DIGEST" --version)"
+              grep -F 'RELEASE.2025-08-13T08-35-41Z' <<<"$OUTPUT"
+              grep -F '7394ce0dd2a80935aded936b09fa12cbb3cb8096' <<<"$OUTPUT"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+
+      - name: Record digest-only architecture output
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Retain native digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.image.name }}-${{ matrix.architecture.name }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-and-attest:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Merge and attest ${{ matrix.image.name }}
+    needs: build-native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: buzz
+            tag: 651f637-startos-r1
+          - name: minio
+            tag: 2025-10-15-startos-r1
+          - name: mc
+            tag: 2025-08-13-startos-r1
+    steps:
+      - name: Download amd64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digest-${{ matrix.image.name }}-amd64
+          path: ${{ runner.temp }}/digests
+
+      - name: Download arm64 digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: digest-${{ matrix.image.name }}-arm64
+          path: ${{ runner.temp }}/digests
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Merge native manifests into one immutable index
+        id: merge
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ matrix.image.name }}
+          IMAGE_TAG: ${{ matrix.image.tag }}
+        run: |
+          mapfile -t DIGESTS < <(
+            find "$RUNNER_TEMP/digests" -maxdepth 1 -type f -printf '%f\n' |
+              sort
+          )
+          test "${#DIGESTS[@]}" -eq 2
+          SOURCES=()
+          for DIGEST in "${DIGESTS[@]}"; do
+            [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+            SOURCES+=("$IMAGE_REF@sha256:$DIGEST")
+          done
+          docker buildx imagetools create \
+            --tag "$IMAGE_REF:$IMAGE_TAG" \
+            "${SOURCES[@]}"
+          RAW_MANIFEST="$(
+            docker buildx imagetools inspect \
+              --raw "$IMAGE_REF:$IMAGE_TAG"
+          )"
+          jq -e '
+            [.manifests[] | select(
+              .platform.os == "linux" and .platform.architecture == "amd64"
+            )] | length == 1
+          ' <<<"$RAW_MANIFEST"
+          jq -e '
+            [.manifests[] | select(
+              .platform.os == "linux" and .platform.architecture == "arm64"
+            )] | length == 1
+          ' <<<"$RAW_MANIFEST"
+          INDEX_DIGEST="$(
+            docker buildx imagetools inspect "$IMAGE_REF:$IMAGE_TAG" \
+              --format '{{json .Manifest}}' |
+              jq -r '.digest'
+          )"
+          [[ "$INDEX_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'digest=%s\n' "$INDEX_DIGEST" >>"$GITHUB_OUTPUT"
+          printf 'name=%s\n' "$IMAGE_REF" >>"$GITHUB_OUTPUT"
+
+      - name: Attest merged image index
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ steps.merge.outputs.name }}
+          subject-digest: ${{ steps.merge.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify published provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.merge.outputs.digest }}
+          IMAGE_REF: ${{ steps.merge.outputs.name }}
+        run: |
+          gh attestation verify "oci://$IMAGE_REF@$IMAGE_DIGEST" \
+            --repo "$GITHUB_REPOSITORY"

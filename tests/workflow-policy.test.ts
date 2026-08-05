@@ -37,6 +37,13 @@ const securityDriftWorkflow = readFileSync(
   new URL('../.github/workflows/security-drift.yml', import.meta.url),
   'utf8',
 )
+const runtimeImagesWorkflowFile = new URL(
+  '../.github/workflows/runtime-images.yml',
+  import.meta.url,
+)
+const runtimeImagesWorkflow = existsSync(runtimeImagesWorkflowFile)
+  ? readFileSync(runtimeImagesWorkflowFile, 'utf8')
+  : ''
 
 type WorkflowRecord = Record<string, unknown>
 
@@ -442,6 +449,74 @@ test('scheduled security drift checks upstream, dependencies, images, and vulner
   )
 })
 
+test('runtime images publish as native immutable indexes with provenance', () => {
+  assert.notEqual(
+    runtimeImagesWorkflow,
+    '',
+    'missing native runtime image publication workflow',
+  )
+  const workflow = parseWorkflow('runtime-images.yml', runtimeImagesWorkflow)
+  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.ok(isRecord(workflow.jobs))
+  const nativeBuild = workflow.jobs['build-native']
+  const merge = workflow.jobs['merge-and-attest']
+  assert.ok(isRecord(nativeBuild))
+  assert.ok(isRecord(merge))
+  assert.deepEqual(nativeBuild.permissions, {
+    contents: 'read',
+    packages: 'write',
+  })
+  assert.deepEqual(merge.permissions, {
+    attestations: 'write',
+    contents: 'read',
+    'id-token': 'write',
+    packages: 'write',
+  })
+
+  assert.match(runtimeImagesWorkflow, /runner: ubuntu-24\.04\n/)
+  assert.match(runtimeImagesWorkflow, /platform: linux\/amd64\n/)
+  assert.match(runtimeImagesWorkflow, /expected_uname: x86_64\n/)
+  assert.match(runtimeImagesWorkflow, /runner: ubuntu-24\.04-arm\n/)
+  assert.match(runtimeImagesWorkflow, /platform: linux\/arm64\n/)
+  assert.match(runtimeImagesWorkflow, /expected_uname: aarch64\n/)
+  assert.doesNotMatch(runtimeImagesWorkflow, /setup-qemu|\bqemu\b/i)
+  assert.doesNotMatch(runtimeImagesWorkflow, /\bpull_request\s*:/)
+  assert.match(runtimeImagesWorkflow, /\n  workflow_dispatch:\n/)
+  assert.match(runtimeImagesWorkflow, /github\.ref == 'refs\/heads\/main'/)
+
+  assert.match(
+    runtimeImagesWorkflow,
+    /prepare-runtime-image-source\.sh "\$\{\{ matrix\.image\.source \}\}"/,
+  )
+  assert.match(runtimeImagesWorkflow, /push-by-digest=true/)
+  assert.match(runtimeImagesWorkflow, /name-canonical=true/)
+  assert.match(runtimeImagesWorkflow, /push=true/)
+  assert.match(runtimeImagesWorkflow, /steps\.build\.outputs\.digest/)
+  assert.match(runtimeImagesWorkflow, /docker buildx imagetools create/)
+  assert.match(runtimeImagesWorkflow, /docker buildx imagetools inspect/)
+  assert.equal(
+    runtimeImagesWorkflow.match(/actions\/attest-build-provenance@/g)?.length,
+    1,
+  )
+  assert.match(runtimeImagesWorkflow, /push-to-registry: true/)
+
+  assert.match(
+    runtimeImagesWorkflow,
+    /REGISTRY: ghcr\.io\/mdubore\/buzz-startos/,
+  )
+  for (const [name, tag] of [
+    ['buzz', '651f637-startos-r1'],
+    ['minio', '2025-10-15-startos-r1'],
+    ['mc', '2025-08-13-startos-r1'],
+  ]) {
+    assert.match(
+      runtimeImagesWorkflow,
+      new RegExp(`- name: ${name}\\n\\s+tag: ${tag}`),
+    )
+  }
+  assert.doesNotMatch(runtimeImagesWorkflow, /(?:^|:)latest(?:\s|$)/m)
+})
+
 test('repository audit collects every control failure before exiting', () => {
   const auditScript = new URL(
     '../scripts/audit-repository-controls.sh',
@@ -538,19 +613,25 @@ test('CodeQL security automation is scheduled and uses reviewed Node 24 action p
   }
 })
 
-test('build, package, and release workflows use reviewed Node 24 action pins', () => {
+test('publication workflows use reviewed Node 24 action pins', () => {
   const expectedPins: Record<string, string> = {
     'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1',
     'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
     'actions/upload-artifact': '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
     'actions/download-artifact': '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
     'actions/attest': 'f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6',
+    'actions/attest-build-provenance':
+      'a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32',
+    'docker/login-action': 'b45d80f862d83dbcd57f89517bcf500b2ab88fb2',
+    'docker/setup-buildx-action': '4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd',
+    'docker/build-push-action': 'f9f3042f7e2789586610d6e8b85c8f03e5195baf',
   }
   for (const [name, workflow] of [
     ['build.yml', buildWorkflow],
     ['package.yml', packageWorkflow],
     ['release.yml', releaseWorkflow],
     ['security-drift.yml', securityDriftWorkflow],
+    ['runtime-images.yml', runtimeImagesWorkflow],
   ] as const) {
     for (const [, action, pin] of workflow.matchAll(
       /^\s+(?:-\s+)?uses: ([^@\s]+)@([^\s#]+)/gm,
