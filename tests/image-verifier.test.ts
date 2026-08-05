@@ -19,7 +19,7 @@ const ARM64_DIGEST =
 const MOVED_INDEX_DIGEST =
   'sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 
-type FixtureName = 'postgres' | 'redis'
+type FixtureName = 'minio' | 'minioClient' | 'postgres' | 'redis'
 
 type Fixture = {
   readonly pin: ImagePin
@@ -73,9 +73,18 @@ const defaultDescriptors = (): Descriptor[] => [
 
 const configFor = (name: FixtureName): Record<string, unknown> => ({
   User: null,
-  Entrypoint: ['docker-entrypoint.sh'],
+  Entrypoint:
+    name === 'minio'
+      ? ['/usr/local/bin/minio']
+      : name === 'minioClient'
+        ? ['/usr/local/bin/mc']
+        : ['docker-entrypoint.sh'],
   Volumes:
-    name === 'postgres' ? { '/var/lib/postgresql/data': {} } : { '/data': {} },
+    name === 'postgres'
+      ? { '/var/lib/postgresql/data': {} }
+      : name === 'minioClient'
+        ? null
+        : { '/data': {} },
 })
 
 const platformImages = (
@@ -160,6 +169,15 @@ test('accepts one runtime manifest per platform while ignoring attestations', ()
     verifyImage('postgres', fixture.pin, fixtureRunner([fixture])),
     [],
   )
+})
+
+test('accepts the rebuilt MinIO static-binary entrypoint contracts', () => {
+  const minio = makeFixture('minio')
+  const minioClient = makeFixture('minioClient')
+  const runner = fixtureRunner([minio, minioClient])
+
+  assert.deepEqual(verifyImage('minio', minio.pin, runner), [])
+  assert.deepEqual(verifyImage('minioClient', minioClient.pin, runner), [])
 })
 
 test('reports an exact-byte index digest mismatch', () => {

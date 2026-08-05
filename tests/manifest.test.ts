@@ -16,7 +16,7 @@ import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
 const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
-const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0'
+const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -524,9 +524,18 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
 
   assert.match(currentContract, new RegExp(UPSTREAM.commit))
   assert.match(currentContract, /desktop-v0\.5\.4/i)
-  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.indexDigest))
-  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.platforms.amd64))
-  assert.match(currentContract, new RegExp(IMAGE_PINS.buzz.platforms.arm64))
+  assert.match(
+    currentContract,
+    /sha256:3f8d3ff503dc735e5578e68194b1dbf543e6e792ae1c7e906c735ee269d2841c/,
+  )
+  assert.match(
+    currentContract,
+    /sha256:e47c31ff9bdd0359e25b9115e69c4a46c1f9cf3c508295d5a020fee6a8f40632/,
+  )
+  assert.match(
+    currentContract,
+    /sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688/,
+  )
   assert.match(updating, new RegExp(UPSTREAM.commit))
   assert.match(updating, /desktop-v0\.5\.4/i)
   assert.match(previousContract, /63496cc/i)
@@ -546,7 +555,7 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.doesNotMatch(localBaseline[0], /\bpublished\b/i)
   assert.match(
     updating,
-    /not evidence for the checked-out\s+`651f637:0` candidate/i,
+    /not evidence for the checked-out\s+`651f637:1` candidate/i,
   )
   assert.match(updating, /651f637` security checkpoint/i)
   assert.doesNotMatch(updating, /clean, fast-forward-only mirror/i)

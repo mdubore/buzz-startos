@@ -23,7 +23,7 @@ handoff rather than embedded recursively in its own contents.
 
 | Field                    | Reviewed value                                                            |
 | ------------------------ | ------------------------------------------------------------------------- |
-| Package version          | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0`                      |
+| Package version          | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1`                      |
 | Candidate state          | `UNFROZEN`                                                                |
 | Candidate tag            | Not created; `DEVICE_CANDIDATE.json` contains `null`                      |
 | Frozen package commit    | Not selected; `DEVICE_CANDIDATE.json` contains `null`                     |

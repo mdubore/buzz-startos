@@ -15,7 +15,7 @@ This document defines the procedure. It does not report that any procedure has
 run. [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is the machine-readable
 candidate identity and [`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md) is the
 authoritative execution status. The proposed package version is
-`0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0`, built from reviewed
+`0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1`, built from reviewed
 upstream commit `651f6372754e60e3f936b3397040eb0f1e44c9f3`. The candidate remains
 `UNFROZEN` until final native artifacts and official StartOS image identities
 are recorded during the release task.

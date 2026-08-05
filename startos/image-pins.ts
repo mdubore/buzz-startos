@@ -19,14 +19,14 @@ export const UPSTREAM = {
 
 export const IMAGE_PINS = {
   buzz: {
-    tagReference: 'ghcr.io/block/buzz:sha-651f637',
+    tagReference: 'ghcr.io/mdubore/buzz-startos/buzz:651f637-startos-r1',
     indexDigest:
-      'sha256:3f8d3ff503dc735e5578e68194b1dbf543e6e792ae1c7e906c735ee269d2841c',
+      'sha256:0ee81c041a6054438fa064b61c900a9190ca06590cdc17a4310a22637ed98a26',
     platforms: {
       amd64:
-        'sha256:e47c31ff9bdd0359e25b9115e69c4a46c1f9cf3c508295d5a020fee6a8f40632',
+        'sha256:cab84f6f6ce28a2651a6411e4ad21ffd530f20f673cf3805df5463bb36f7eabe',
       arm64:
-        'sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688',
+        'sha256:8d14591c062a98554f900b3e90005a26455a9750e31e81f78d6a211a89e4e40e',
     },
   },
   postgres: {
@@ -52,25 +52,25 @@ export const IMAGE_PINS = {
     },
   },
   minio: {
-    tagReference: 'minio/minio:RELEASE.2025-09-07T16-13-09Z',
+    tagReference: 'ghcr.io/mdubore/buzz-startos/minio:2025-10-15-startos-r1',
     indexDigest:
-      'sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e',
+      'sha256:50b911e96ba5b3c12f6be22ae6ab960834146b12b4103a28f409a2c22868867e',
     platforms: {
       amd64:
-        'sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2',
+        'sha256:8bb5422f0f83c2b10efa1963943721224f102eaa1d4159988052773bc9c0150c',
       arm64:
-        'sha256:9966a92a734f9411e32f4f41d7d9d826fcdc0f68c4e20b70295bd4e7c11f8a2f',
+        'sha256:f620f328fc842376247696513ca9cffb9323402e01629043320805d41a7f23e8',
     },
   },
   minioClient: {
-    tagReference: 'minio/mc:RELEASE.2025-08-13T08-35-41Z',
+    tagReference: 'ghcr.io/mdubore/buzz-startos/mc:2025-08-13-startos-r1',
     indexDigest:
-      'sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727',
+      'sha256:b8ebbd404e9666618152c8ddfff1ff3d2a409d2a8803abcac0eb02dab8294f5f',
     platforms: {
       amd64:
-        'sha256:eb4ea9884b77704230e2423e9004d2fa738dc272876b9cc41a297d29443b8780',
+        'sha256:916cc9cebe53c0aa6a78fea51dcbdcb10326da0bacc866da3693e94b154c6f98',
       arm64:
-        'sha256:37d109dddbbb2c95873f5fc81ac93f37023264770fc580a7564148892087b1b7',
+        'sha256:1d1acfad618195a125aa59a52768a6920a9d369a70b30b852b1cd40abc3e15d9',
     },
   },
 } as const satisfies Record<string, ImagePin>

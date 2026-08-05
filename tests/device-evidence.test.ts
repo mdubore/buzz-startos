@@ -514,7 +514,7 @@ test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async (
   assert.equal(candidate.package.tag, null)
   assert.equal(
     candidate.package.version,
-    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0',
+    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1',
   )
   assert.equal(candidate.package.packageCommit, null)
   assert.equal(
@@ -735,7 +735,7 @@ for (const [label, setFrozenValue] of [
       await readFile(candidatePath, 'utf8'),
     ) as MutableCandidateContract
     candidate.package.version =
-      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0'
+      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1'
     candidate.package.upstreamCommit =
       '651f6372754e60e3f936b3397040eb0f1e44c9f3'
     setFrozenValue(candidate)
@@ -2194,7 +2194,7 @@ test('documents the ordered stable StartOS production run', async () => {
     assert.match(document, /rebuild[\s\S]{0,120}final tracked commit/i)
     assert.match(
       document,
-      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:0/,
+      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:1/,
     )
     assert.match(document, /651f6372754e60e3f936b3397040eb0f1e44c9f3/)
     assert.match(document, /Community Registry beta/i)

@@ -24,7 +24,7 @@ evidence record must exactly match the resulting frozen contract.
 | ------------------------- | ------------------------------------------------------------------------- |
 | Candidate state           | `UNFROZEN` — `SECURITY-BLOCKED` / `NO-GO`                                 |
 | Candidate tag             | Null until final freeze                                                   |
-| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0`                      |
+| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1`                      |
 | Package commit            | Null until final freeze                                                   |
 | Upstream Buzz commit      | `651f6372754e60e3f936b3397040eb0f1e44c9f3`                                |
 | Release signer            | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |

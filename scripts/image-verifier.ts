@@ -78,12 +78,12 @@ const RUNTIME_EXPECTATIONS = {
   },
   minio: {
     user: '',
-    entrypoint: ['/usr/bin/docker-entrypoint.sh'],
+    entrypoint: ['/usr/local/bin/minio'],
     volumes: ['/data'],
   },
   minioClient: {
     user: '',
-    entrypoint: ['mc'],
+    entrypoint: ['/usr/local/bin/mc'],
     volumes: [],
   },
 } as const satisfies Record<ImageName, RuntimeExpectation>

@@ -22,12 +22,12 @@ with `git rev-parse upstream/main`.
 The checked-out, test-only candidate identity is:
 
 ```text
-0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:0
+0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1
 ```
 
 Its upstream portion is the exact official Buzz snapshot
-`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:0` resets the downstream StartOS
-wrapper revision for the new upstream snapshot. The candidate retains the
+`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:1` records the first downstream
+runtime-image security rebuild of that snapshot. The candidate retains the
 production-readiness controls, disposable Git-cache repair, and dedicated
 LAN-only pairing relay. It is not submission-ready: the dependency gate has an
 unwaived High finding, the Buzz, MinIO, and MinIO Client native images have
@@ -522,7 +522,7 @@ tag.
 
 The `dd222a5` and `63496cc` scan records are historical evidence for their
 respective package snapshots. They are not evidence for the checked-out
-`651f637:0` candidate. Candidate evidence comes from the `651f637` runtime
+`651f637:1` candidate. Candidate evidence comes from the `651f637` runtime
 contract, `651f637` security checkpoint, and immutable pins.
 
 ## 7. Update Package Metadata
