@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -buildvcs=false -trimpath \
       -X github.com/minio/mc/cmd.ShortCommitID=7394ce0dd2a8" \
     -o /out/mc .
 
-FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime
+FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS runtime
 LABEL org.opencontainers.image.title="MinIO Client for Buzz on StartOS" \
       org.opencontainers.image.description="MinIO client runtime for Buzz on StartOS" \
       org.opencontainers.image.source="https://github.com/mdubore/buzz-startos" \

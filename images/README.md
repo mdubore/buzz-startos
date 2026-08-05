@@ -33,6 +33,9 @@ docker buildx build --load \
   /tmp/minio-source
 ```
 
-All base images are pinned to multi-architecture index digests. Publication is
-performed by native amd64 and arm64 jobs; the resulting immutable manifests are
-scanned and recorded before the StartOS package pins them.
+All base images are pinned to multi-architecture index digests. The runtime
+stages use Alpine 3.24 so the package receives its current curl, libc, and
+system-package security fixes without changing Buzz application source.
+Publication is performed by native amd64 and arm64 jobs; the resulting
+immutable manifests are scanned and recorded before the StartOS package pins
+them. Published bytes are revisioned rather than replacing an existing tag.

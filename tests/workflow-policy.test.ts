@@ -505,9 +505,9 @@ test('runtime images publish as native immutable indexes with provenance', () =>
     /REGISTRY: ghcr\.io\/mdubore\/buzz-startos/,
   )
   for (const [name, tag] of [
-    ['buzz', '651f637-startos-r1'],
-    ['minio', '2025-10-15-startos-r1'],
-    ['mc', '2025-08-13-startos-r1'],
+    ['buzz', '651f637-startos-r2'],
+    ['minio', '2025-10-15-startos-r2'],
+    ['mc', '2025-08-13-startos-r2'],
   ]) {
     assert.match(
       runtimeImagesWorkflow,

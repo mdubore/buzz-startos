@@ -53,18 +53,23 @@ test('Buzz runtime preserves the StartOS relay contract', () => {
 
   assert.match(dockerfile, /ARG RUST_VERSION=1\.95/)
   assert.match(dockerfile, /ARG NODE_VERSION=24/)
-  assert.match(dockerfile, /FROM rust:.*@sha256:[a-f0-9]{64}/)
-  assert.match(dockerfile, /FROM node:.*@sha256:[a-f0-9]{64}/)
-  assert.match(dockerfile, /FROM debian:.*@sha256:[a-f0-9]{64}/)
+  assert.match(dockerfile, /FROM rust:.*-alpine3\.23@sha256:[a-f0-9]{64}/)
+  assert.match(dockerfile, /FROM node:.*-alpine3\.24@sha256:[a-f0-9]{64}/)
+  assert.match(dockerfile, /FROM alpine:3\.24@sha256:[a-f0-9]{64}/)
+  assert.doesNotMatch(dockerfile, /FROM debian:/)
   assert.match(
     dockerfile,
     /cargo build --release --locked[\s\S]*buzz-relay[\s\S]*buzz-admin[\s\S]*buzz-pair-relay/,
   )
-  assert.match(dockerfile, /apt-get upgrade -y/)
+  assert.match(
+    dockerfile,
+    /cargo chef cook --release --recipe-path recipe\.json \\\n\s+-p buzz-relay \\\n\s+-p buzz-admin \\\n\s+-p buzz-pair-relay/,
+  )
+  assert.match(dockerfile, /apk upgrade --no-cache/)
   assert.match(dockerfile, /ca-certificates[\s\S]*curl[\s\S]*git[\s\S]*openssl/)
   assert.match(dockerfile, /EXPOSE 3000 8080 9102/)
   assert.match(dockerfile, /mkdir -p \/data\/git/)
-  assert.match(dockerfile, /--uid 1000/)
+  assert.match(dockerfile, /adduser[\s\S]*-u 1000/)
   assert.match(dockerfile, /USER buzz:buzz/)
   assert.match(dockerfile, /ENTRYPOINT \["\/usr\/local\/bin\/buzz-relay"\]/)
 })
@@ -78,7 +83,7 @@ test('MinIO and MC build native static binaries into minimal runtimes', () => {
       dockerfile,
       /FROM golang:1\.26\.5-.*@sha256:[a-f0-9]{64} AS builder/,
     )
-    assert.match(dockerfile, /FROM alpine:.*@sha256:[a-f0-9]{64}/)
+    assert.match(dockerfile, /FROM alpine:3\.24@sha256:[a-f0-9]{64}/)
     assert.match(dockerfile, /CGO_ENABLED=0 go build/)
     assert.match(dockerfile, /-buildvcs=false/)
     assert.match(dockerfile, /-trimpath/)
