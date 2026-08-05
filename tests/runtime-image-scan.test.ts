@@ -5,6 +5,22 @@ import test from 'node:test'
 import { runtimeImageTargets } from '../scripts/runtime-image-targets.js'
 import { IMAGE_PINS } from '../startos/image-pins.js'
 
+test('AJV resolves the patched fast-uri 3.x release', () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  ) as {
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  const lockfile = JSON.parse(
+    readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'),
+  ) as { packages: Record<string, { version?: string }> }
+
+  assert.equal(packageJson.dependencies?.['fast-uri'], undefined)
+  assert.equal(packageJson.devDependencies?.['fast-uri'], undefined)
+  assert.equal(lockfile.packages['node_modules/fast-uri']?.version, '3.1.5')
+})
+
 test('runtime scan covers both native manifests for every pinned image', () => {
   const targets = runtimeImageTargets()
 
