@@ -17,40 +17,40 @@ test('pins the complete runtime image set by immutable OCI digest', () => {
   assert.equal(UPSTREAM.relayVersion, '0.2.0')
   assert.equal(
     IMAGE_PINS.buzz.tagReference,
-    `ghcr.io/mdubore/buzz-startos/buzz:${UPSTREAM.shortCommit}-startos-r1`,
+    `ghcr.io/mdubore/buzz-startos/buzz:${UPSTREAM.shortCommit}-startos-r2`,
   )
   assert.equal(
     IMAGE_PINS.buzz.indexDigest,
-    'sha256:0ee81c041a6054438fa064b61c900a9190ca06590cdc17a4310a22637ed98a26',
+    'sha256:61c2c9008e3853264b3df6dbc3119ee7ba1d6278340a1780eaec0b955f2dd985',
   )
   assert.equal(
     IMAGE_PINS.buzz.platforms.amd64,
-    'sha256:cab84f6f6ce28a2651a6411e4ad21ffd530f20f673cf3805df5463bb36f7eabe',
+    'sha256:169af34712fa2d8e2de95626689a2580b0b3231a780d7512322a6fb69641542a',
   )
   assert.equal(
     IMAGE_PINS.buzz.platforms.arm64,
-    'sha256:8d14591c062a98554f900b3e90005a26455a9750e31e81f78d6a211a89e4e40e',
+    'sha256:5966d41571e6a79e70ff13eda2fbcf06fec886d74a07b413c51d8c04198b823f',
   )
   assert.deepEqual(IMAGE_PINS.minio, {
-    tagReference: 'ghcr.io/mdubore/buzz-startos/minio:2025-10-15-startos-r1',
+    tagReference: 'ghcr.io/mdubore/buzz-startos/minio:2025-10-15-startos-r2',
     indexDigest:
-      'sha256:50b911e96ba5b3c12f6be22ae6ab960834146b12b4103a28f409a2c22868867e',
+      'sha256:5cff18515d059362060790bb17928a25b8b3653f5ac842a7742e9953ffa3a5d9',
     platforms: {
       amd64:
-        'sha256:8bb5422f0f83c2b10efa1963943721224f102eaa1d4159988052773bc9c0150c',
+        'sha256:cf33684eacfc87dbde1e2bedc24c85f85ca1dc7bc7f566b220a8b04fc38667e9',
       arm64:
-        'sha256:f620f328fc842376247696513ca9cffb9323402e01629043320805d41a7f23e8',
+        'sha256:3c9bb9f4ef4e50aeb875365cf405d7ea36dac0fdfd8c294daa43808783e50821',
     },
   })
   assert.deepEqual(IMAGE_PINS.minioClient, {
-    tagReference: 'ghcr.io/mdubore/buzz-startos/mc:2025-08-13-startos-r1',
+    tagReference: 'ghcr.io/mdubore/buzz-startos/mc:2025-08-13-startos-r2',
     indexDigest:
-      'sha256:b8ebbd404e9666618152c8ddfff1ff3d2a409d2a8803abcac0eb02dab8294f5f',
+      'sha256:b1a507ecdf3ef5272791bd3e5b66e9f6e9b73d093f3aab9a0f481fd1e729baf6',
     platforms: {
       amd64:
-        'sha256:916cc9cebe53c0aa6a78fea51dcbdcb10326da0bacc866da3693e94b154c6f98',
+        'sha256:4c75881d7a130597c444d9d233ad0ec41dc62e6c025374f93365e7c7fa1fbd1c',
       arm64:
-        'sha256:1d1acfad618195a125aa59a52768a6920a9d369a70b30b852b1cd40abc3e15d9',
+        'sha256:c0ea7881bae5f9e0df24bda610c6fe9ed2f51504924474a0eef0a2c4ec2a1827',
     },
   })
   assert.deepEqual(Object.keys(IMAGE_PINS).sort(), [

@@ -6,8 +6,9 @@ Buzz application source and StartOS packaging have separate histories:
   `block/buzz`; it currently carries the reviewed native-root changes for the
   desktop and `buzz-acp` relay clients.
 - this repository contains the StartOS server packaging, tests, assets, and
-  documentation. Its Buzz container pin is an official `block/buzz` image and
-  does not embed the companion fork's application commits.
+  documentation. Its Buzz runtime is reproducibly rebuilt from the exact
+  reviewed `block/buzz` source commit and does not embed the companion fork's
+  application commits.
 
 Never auto-merge an upstream commit into a release and never select a moving
 `upstream/main` head merely because it is newer. Choose an explicit reviewed
@@ -19,32 +20,32 @@ with `git rev-parse upstream/main`.
 
 ## Current Candidate And Upgrade Baselines
 
-The checked-out, test-only candidate identity is:
+The checked-out device-test candidate identity is:
 
 ```text
-0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1
+0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2
 ```
 
 Its upstream portion is the exact official Buzz snapshot
-`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:1` records the first downstream
+`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:2` records the second downstream
 runtime-image security rebuild of that snapshot. The candidate retains the
 production-readiness controls, disposable Git-cache repair, and dedicated
-LAN-only pairing relay. It is not submission-ready: the dependency gate has an
-unwaived High finding, the Buzz, MinIO, and MinIO Client native images have
-Critical findings, the Buzz images also have Unknown-severity findings, and
-live StartOS/device validation remains incomplete. The complete fail-closed
-result is in `docs/security/651f637-runtime-scan.md`.
+LAN-only pairing relay. The dependency and ten-manifest OCI gates pass for the
+r2 runtime, but final signed packages have not been frozen and live
+StartOS/device validation remains incomplete. The current evidence is in
+`docs/security/651f637-startos-r2-runtime-scan.md`.
 
 The candidate's immutable Buzz image pins are:
 
 | Input         | Exact candidate value                                                     |
 | ------------- | ------------------------------------------------------------------------- |
-| Upstream tag  | `ghcr.io/block/buzz:sha-651f637`                                          |
-| OCI index     | `sha256:3f8d3ff503dc735e5578e68194b1dbf543e6e792ae1c7e906c735ee269d2841c` |
-| `linux/amd64` | `sha256:e47c31ff9bdd0359e25b9115e69c4a46c1f9cf3c508295d5a020fee6a8f40632` |
-| `linux/arm64` | `sha256:40a76804867eb9880bec2e191dcb21c28ffae9c3e053e317199b9aaae0177688` |
+| Downstream tag | `ghcr.io/mdubore/buzz-startos/buzz:651f637-startos-r2`                    |
+| OCI index      | `sha256:61c2c9008e3853264b3df6dbc3119ee7ba1d6278340a1780eaec0b955f2dd985` |
+| `linux/amd64`  | `sha256:169af34712fa2d8e2de95626689a2580b0b3231a780d7512322a6fb69641542a` |
+| `linux/arm64`  | `sha256:5966d41571e6a79e70ff13eda2fbcf06fec886d74a07b413c51d8c04198b823f` |
 
-`docs/upstream/651f637-runtime-contract.md` is the candidate runtime evidence.
+`docs/upstream/651f637-startos-r2-runtime-contract.md` is the candidate runtime
+evidence.
 The latest local sideload upgrade baseline is
 `0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2`, documented by
 `docs/upstream/63496cc-runtime-contract.md`. The older
@@ -522,7 +523,7 @@ tag.
 
 The `dd222a5` and `63496cc` scan records are historical evidence for their
 respective package snapshots. They are not evidence for the checked-out
-`651f637:1` candidate. Candidate evidence comes from the `651f637` runtime
+`651f637:2` candidate. Candidate evidence comes from the `651f637` runtime
 contract, `651f637` security checkpoint, and immutable pins.
 
 ## 7. Update Package Metadata

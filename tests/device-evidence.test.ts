@@ -514,7 +514,7 @@ test('declares the official StartOS 0.4.0 lineage but remains unfrozen', async (
   assert.equal(candidate.package.tag, null)
   assert.equal(
     candidate.package.version,
-    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1',
+    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2',
   )
   assert.equal(candidate.package.packageCommit, null)
   assert.equal(
@@ -735,7 +735,7 @@ for (const [label, setFrozenValue] of [
       await readFile(candidatePath, 'utf8'),
     ) as MutableCandidateContract
     candidate.package.version =
-      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1'
+      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2'
     candidate.package.upstreamCommit =
       '651f6372754e60e3f936b3397040eb0f1e44c9f3'
     setFrozenValue(candidate)
@@ -749,7 +749,7 @@ for (const [label, setFrozenValue] of [
   })
 }
 
-test('requires every frozen-only identity before a candidate can be FROZEN', async (t) => {
+test('requires every package artifact identity before a candidate can be FROZEN', async (t) => {
   const validator = await loadValidator()
   const directory = await mkdtemp(join(tmpdir(), 'buzz-frozen-complete-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
@@ -772,18 +772,6 @@ test('requires every frozen-only identity before a candidate can be FROZEN', asy
     (candidate: MutableCandidateContract) => {
       candidate.package.artifacts.aarch64.sizeBytes = null
     },
-    (candidate: MutableCandidateContract) => {
-      candidate.startos.architectures.x86_64.buildId = null
-    },
-    (candidate: MutableCandidateContract) => {
-      candidate.startos.architectures.x86_64.imageSha256 = null
-    },
-    (candidate: MutableCandidateContract) => {
-      candidate.startos.architectures.aarch64.buildId = null
-    },
-    (candidate: MutableCandidateContract) => {
-      candidate.startos.architectures.aarch64.imageSha256 = null
-    },
   ]
 
   for (const [index, omit] of omissions.entries()) {
@@ -799,6 +787,44 @@ test('requires every frozen-only identity before a candidate can be FROZEN', asy
       /FROZEN candidate identity must be complete/,
     )
   }
+})
+
+test('freezes exact package bytes before device-generated StartOS identities are known', async (t) => {
+  const validator = await loadValidator()
+  const directory = await mkdtemp(join(tmpdir(), 'buzz-frozen-package-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const candidate = JSON.parse(
+    await readFile(frozenCandidatePath, 'utf8'),
+  ) as MutableCandidateContract
+  for (const architecture of ['x86_64', 'aarch64'] as const) {
+    candidate.startos.architectures[architecture].buildId = null
+    candidate.startos.architectures[architecture].imageSha256 = null
+  }
+  const candidateFile = join(directory, 'candidate.json')
+  await writeFile(candidateFile, JSON.stringify(candidate))
+
+  const loaded = await validator.loadCandidateContract(
+    pathToFileURL(candidateFile),
+  )
+  assert.equal(loaded.state, 'FROZEN')
+  assert.deepEqual(loaded.startos.architectures, {
+    x86_64: { buildId: null, imageSha256: null },
+    aarch64: { buildId: null, imageSha256: null },
+  })
+
+  const record = JSON.parse(
+    await readFile(fixture('valid-artifact.json'), 'utf8'),
+  ) as MutableEvidenceFixture
+  await retainFixtureAttachment(directory)
+  const recordFile = join(directory, 'record.json')
+  await writeFile(recordFile, JSON.stringify(record))
+
+  const result = await validator.validateEvidenceFile(
+    pathToFileURL(recordFile),
+    schemaPath,
+    { candidatePath: pathToFileURL(candidateFile) },
+  )
+  assert.deepEqual(result, { valid: true, errors: [] })
 })
 
 test('rejects a manually asserted authenticated-review enforcement flag', async (t) => {
@@ -2189,12 +2215,12 @@ test('documents the ordered stable StartOS production run', async () => {
   ])
 
   for (const document of [matrix, runbook]) {
-    assert.match(document, /SECURITY-BLOCKED[\s\S]{0,120}NO-GO/i)
+    assert.match(document, /AUTOMATION-CLEAR[\s\S]{0,120}NO-GO/i)
     assert.match(document, /preparatory[\s\S]{0,120}non-final/i)
     assert.match(document, /rebuild[\s\S]{0,120}final tracked commit/i)
     assert.match(
       document,
-      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:1/,
+      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:2/,
     )
     assert.match(document, /651f6372754e60e3f936b3397040eb0f1e44c9f3/)
     assert.match(document, /Community Registry beta/i)

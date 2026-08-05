@@ -11,9 +11,10 @@
 [![Security Drift](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml/badge.svg?branch=main)](https://github.com/mdubore/buzz-startos/actions/workflows/security-drift.yml)
 
 > [!WARNING]
-> This candidate is security-blocked and test-only. Its dependency and
-> native-image gates are not clear, its StartOS device matrix has not been run,
-> and it must not be submitted to the Community Registry yet. See the
+> This candidate has cleared its automated dependency, runtime-image, build,
+> and package-source gates. It is staged for device testing: its final signed
+> artifacts are not frozen and its StartOS device matrix has not been run, so
+> it must not be submitted to the Community Registry yet. See the
 > [current evidence index](docs/EVIDENCE.md) and
 > [remaining work](TODO.md).
 
@@ -42,11 +43,11 @@ repository browser routes.
 
 ## Image and Container Runtime
 
-The package supports `x86_64` and `aarch64`. It uses upstream-published images
-for Buzz, PostgreSQL, Redis, MinIO, and the MinIO client.
-The official `block/buzz` image pins are defined in
-[`startos/image-pins.ts`](startos/image-pins.ts), along with the OCI indexes and
-native platform manifests.
+The package supports `x86_64` and `aarch64`. Buzz, MinIO, and the MinIO client
+are reproducibly rebuilt from exact upstream source commits into patched
+downstream Alpine runtimes. PostgreSQL and Redis use reviewed upstream images.
+All pins are defined in [`startos/image-pins.ts`](startos/image-pins.ts), along
+with the OCI indexes and native platform manifests.
 
 The Buzz image supplies the main relay, `buzz-admin`, and the stateless
 `buzz-pair-relay` binary. StartOS runs the main image entrypoint for the relay,
@@ -288,9 +289,9 @@ subcontainers, not dependencies on other StartOS services.
 ## Limitations and Differences
 
 1. The canonical URL is immutable; no host-rename migration exists.
-2. The package is a security-blocked, test-only candidate and is not eligible
-   for Community Registry submission until its recorded dependency and image
-   findings are remediated and rescanned.
+2. The package is a device-test candidate and is not eligible for Community
+   Registry submission until the final signed artifacts are frozen and the
+   required real-device checks pass.
 3. Remote mobile is unsupported. In the current private-CA configuration,
    unmodified Android rejects the StartOS Root CA path and secure pairing fails.
 4. Tenant-bearing requests for unknown hosts fail closed.

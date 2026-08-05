@@ -847,33 +847,35 @@ function candidateContractErrors(value: unknown): string[] {
     )
   }
 
-  const frozenValues = [
+  const frozenPackageValues = [
     packageIdentity.tag,
     packageIdentity.packageCommit,
     ...(['x86_64', 'aarch64'] as const).flatMap((architecture) => {
-      const startosIdentity = isRecord(architectures[architecture])
-        ? architectures[architecture]
-        : {}
       const artifact = isRecord(artifacts[architecture])
         ? artifacts[architecture]
         : {}
-      return [
-        startosIdentity.buildId,
-        startosIdentity.imageSha256,
-        artifact.sha256,
-        artifact.sizeBytes,
-      ]
+      return [artifact.sha256, artifact.sizeBytes]
     }),
   ]
   if (
     value.state === 'FROZEN' &&
-    frozenValues.some((candidateValue) => candidateValue === null)
+    frozenPackageValues.some((candidateValue) => candidateValue === null)
   ) {
     errors.push('FROZEN candidate identity must be complete')
   }
+  const observedStartosValues = (['x86_64', 'aarch64'] as const).flatMap(
+    (architecture) => {
+      const startosIdentity = isRecord(architectures[architecture])
+        ? architectures[architecture]
+        : {}
+      return [startosIdentity.buildId, startosIdentity.imageSha256]
+    },
+  )
   if (
     value.state === 'UNFROZEN' &&
-    frozenValues.some((candidateValue) => candidateValue !== null)
+    [...frozenPackageValues, ...observedStartosValues].some(
+      (candidateValue) => candidateValue !== null,
+    )
   ) {
     errors.push('UNFROZEN candidate identity must not contain frozen values')
   }
@@ -1488,7 +1490,7 @@ function customEvidenceErrors(
       ]
 
       for (const [field, observed, expected] of comparisons) {
-        if (observed !== expected) {
+        if (expected !== null && observed !== expected) {
           errors.push(`${field} does not match the frozen candidate`)
         }
       }

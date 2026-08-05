@@ -134,3 +134,48 @@ test('package workflow gates npm and OCI risk with checksum-pinned tooling', () 
   assert.match(workflow, /npm run scan:images -- runtime-scan-results/)
   assert.match(workflow, /name: runtime-vulnerability-reports/)
 })
+
+test('records the passing r2 ten-manifest vulnerability scan', () => {
+  const checkpoint = readFileSync(
+    new URL(
+      '../docs/security/651f637-startos-r2-runtime-scan.md',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+
+  assert.match(checkpoint, /Grype(?: version)?:? `?0\.116\.0`?/i)
+  assert.match(checkpoint, /database schema: `v6\.1\.9`/i)
+  assert.match(checkpoint, /database built: `2026-08-05T07:04:14Z`/i)
+  assert.match(
+    checkpoint,
+    /database source checksum:[\s\S]{0,100}`sha256:d929b4ee3f8c535f76847d46d08b6844b86b7d150e60da578b5ea5e9755dc6ba`/i,
+  )
+  assert.match(
+    checkpoint,
+    /effective configuration SHA-256:[\s\S]{0,100}`c12a9608de881cb3ac97be666629a1a1e17fb515d74701ae44a0d0881548a9ff`/i,
+  )
+  assert.match(
+    checkpoint,
+    /target manifest SHA-256:[\s\S]{0,100}`b06e9f356af2874738b31198af89a88eb05ff1bb4def2ba75eb0ede001c9a5f8`/i,
+  )
+  for (const reportHash of [
+    'f106cf778355e367382d52ba22e5727b53a7fb3298b25528061ba3d58cdfc1d7',
+    '6224f91404a268ade24bff43dffddd19b9b9d2da6ecfac29aa27670a8ad363f9',
+    '66ec5a93992d841de72c795dd13db1c731a3b6f0c6c6306f863bc36ab2dddc1b',
+    'b2df307a67ccda3b88760615f7cf0e5288cf9d3738047e777c9730c734602496',
+    '93bcbc0f4d9ceca223ce7bf98a323550290d33f485807ecb84798e891db90238',
+    '5ebded2924855db947084d73787bbc0625d54a3d89e2cdea396a72f3852d7a55',
+    '6509099a54f652656161122a8eb93004bc1c76aa8b050ba830091a0047a088bf',
+    '0342d37238bc8686549aac77614047c09cd72bebfb12aa0b948cf64c1ac0ec09',
+    '16ab1284d993f4d71cf074ffa32127c5492f800586a355b39bb321119b30e4c1',
+    '649422450ac3d21ae04fe3b71ea4dfd5504c6e29fabcbc2052ca834a35e69018',
+  ]) {
+    assert.match(checkpoint, new RegExp(reportHash))
+  }
+  assert.match(checkpoint, /10 image target\(s\)/i)
+  assert.match(checkpoint, /zero Critical/i)
+  assert.match(checkpoint, /zero High/i)
+  assert.match(checkpoint, /zero Unknown/i)
+  assert.match(checkpoint, /0 waived High finding/i)
+})

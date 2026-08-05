@@ -13,9 +13,13 @@ index instead of embedding volatile commit identities.
 
 ## Current Candidate Records
 
-- [Audited runtime contract](upstream/651f637-runtime-contract.md)
-- [Dependency and native-image security checkpoint](security/651f637-runtime-scan.md)
+- [Audited rebuilt-runtime contract](upstream/651f637-startos-r2-runtime-contract.md)
+- [Passing dependency and native-image security checkpoint](security/651f637-startos-r2-runtime-scan.md)
+- [Underlying upstream application contract](upstream/651f637-runtime-contract.md)
 
-The security checkpoint is fail-closed and keeps this candidate test-only. This
-index does not replace or summarize those records; follow the linked documents
-for exact identities, scanner results, findings, and remaining gates.
+The fail-closed dependency and OCI security gates are clear for the rebuilt r2
+runtime. The candidate still requires a frozen signed package and real StartOS
+device evidence. This index does not replace or summarize those records; follow
+the linked documents for exact identities, scanner results, and remaining
+gates. The historical failing checkpoint remains at
+[`651f637-runtime-scan.md`](security/651f637-runtime-scan.md).

@@ -16,7 +16,7 @@ import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
 const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
-const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1'
+const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -416,8 +416,8 @@ test('routes volatile evidence through one stable index', async () => {
   assert.doesNotMatch(readme, new RegExp(UPSTREAM.shortCommit, 'i'))
 
   const evidence = await readFile('docs/EVIDENCE.md', 'utf8')
-  const runtimePath = `upstream/${UPSTREAM.shortCommit}-runtime-contract.md`
-  const securityPath = `security/${UPSTREAM.shortCommit}-runtime-scan.md`
+  const runtimePath = `upstream/${UPSTREAM.shortCommit}-startos-r2-runtime-contract.md`
+  const securityPath = `security/${UPSTREAM.shortCommit}-startos-r2-runtime-scan.md`
   assert.match(
     evidence,
     new RegExp(`\\]\\(${runtimePath.replaceAll('.', '\\.')}\\)`),
@@ -497,7 +497,7 @@ test('keeps the contributor README stable and complete', async () => {
     readme,
     /remote mobile[\s\S]{0,120}(?:unsupported|not supported)/i,
   )
-  assert.match(readme, /candidate[\s\S]{0,160}(?:test-only|security-blocked)/i)
+  assert.match(readme, /candidate[\s\S]{0,160}device[\s-]*test/i)
   assert.match(readme, /Redis[\s\S]{0,80}60 seconds/i)
   assert.match(readme, /pairing[\s\S]{0,80}60 seconds/i)
   assert.match(readme, /PostgreSQL[\s\S]{0,80}120 seconds/i)
@@ -542,7 +542,7 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.match(previousContract, /00ecf2c/i)
 
   assert.match(readme, /downstream companion-client fork/i)
-  assert.match(readme, /official `block\/buzz` image pins/i)
+  assert.match(readme, /reproducibly rebuilt[\s\S]{0,100}upstream source/i)
   assert.match(readme, /docs\/EVIDENCE\.md/)
   assert.doesNotMatch(readme, new RegExp(UPSTREAM.shortCommit, 'i'))
   assert.match(updating, /Prepare A Reviewed Companion-Fork Update/i)
@@ -555,7 +555,7 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.doesNotMatch(localBaseline[0], /\bpublished\b/i)
   assert.match(
     updating,
-    /not evidence for the checked-out\s+`651f637:1` candidate/i,
+    /not evidence for the checked-out\s+`651f637:2` candidate/i,
   )
   assert.match(updating, /651f637` security checkpoint/i)
   assert.doesNotMatch(updating, /clean, fast-forward-only mirror/i)
@@ -577,4 +577,33 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   )
   assert.match(historicalContract, /Historical status: superseded/i)
   assert.match(historicalContract, /does not describe the current/i)
+})
+
+test('records the rebuilt r2 runtime contract and publication provenance', async () => {
+  const [contract, evidence] = await Promise.all([
+    readFile('docs/upstream/651f637-startos-r2-runtime-contract.md', 'utf8'),
+    readFile('docs/EVIDENCE.md', 'utf8'),
+  ])
+
+  assert.match(contract, new RegExp(UPSTREAM.commit))
+  assert.match(contract, /Runtime Images.*31002688940/i)
+  assert.match(contract, /5dd0ff1d20e3a7e1a6edb763524849ac09d3fab5/)
+  assert.match(contract, /Alpine 3\.24/i)
+  for (const digest of [
+    '61c2c9008e3853264b3df6dbc3119ee7ba1d6278340a1780eaec0b955f2dd985',
+    '169af34712fa2d8e2de95626689a2580b0b3231a780d7512322a6fb69641542a',
+    '5966d41571e6a79e70ff13eda2fbcf06fec886d74a07b413c51d8c04198b823f',
+    '5cff18515d059362060790bb17928a25b8b3653f5ac842a7742e9953ffa3a5d9',
+    'cf33684eacfc87dbde1e2bedc24c85f85ca1dc7bc7f566b220a8b04fc38667e9',
+    '3c9bb9f4ef4e50aeb875365cf405d7ea36dac0fdfd8c294daa43808783e50821',
+    'b1a507ecdf3ef5272791bd3e5b66e9f6e9b73d093f3aab9a0f481fd1e729baf6',
+    '4c75881d7a130597c444d9d233ad0ec41dc62e6c025374f93365e7c7fa1fbd1c',
+    'c0ea7881bae5f9e0df24bda610c6fe9ed2f51504924474a0eef0a2c4ec2a1827',
+  ]) {
+    assert.match(contract, new RegExp(`sha256:${digest}`))
+  }
+  assert.match(contract, /buzz-pair-relay.*127\.0\.0\.1:5000/is)
+  assert.match(contract, /Android.*private StartOS Root CA/is)
+  assert.match(evidence, /upstream\/651f637-startos-r2-runtime-contract\.md/)
+  assert.match(evidence, /security\/651f637-startos-r2-runtime-scan\.md/)
 })

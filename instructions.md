@@ -4,9 +4,9 @@ Your first setup choice is permanent: the selected StartOS URL identifies this
 Buzz community and is used for authentication, media, and Git links.
 
 > [!WARNING]
-> This package is a security-blocked, test-only candidate. Its dependency and
-> image findings must be remediated and its StartOS device tests must be
-> completed before production or Community Registry use. Do not make it the
+> This package is a device-test candidate. Its automated dependency, image,
+> and package-source gates pass, but its final signed artifacts and StartOS
+> device tests are not complete. Do not use it for production or make it the
 > only copy of irreplaceable data.
 
 ## Documentation

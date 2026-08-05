@@ -6,31 +6,34 @@ hardware. The target is the official stable StartOS `0.4.0` release with its
 exact build identity recorded. Manifest minimum `0.4.0-beta.10` is only the
 compatibility floor; a beta installation cannot satisfy this runbook.
 
-The staged candidate is **SECURITY-BLOCKED** and therefore **NO-GO** for both
-Community Registry beta submission and production promotion. It remains
-`UNFROZEN`, and no automated, static, image, or host-only result may be promoted
-to real-device evidence.
+The staged candidate is **AUTOMATION-CLEAR** but remains **NO-GO** for both
+Community Registry beta submission and production promotion until its signed
+artifacts are frozen and the required device gates pass. It remains `UNFROZEN`,
+and no automated, static, image, or host-only result may be promoted to
+real-device evidence.
 
 This document defines the procedure. It does not report that any procedure has
 run. [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is the machine-readable
 candidate identity and [`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md) is the
 authoritative execution status. The proposed package version is
-`0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1`, built from reviewed
+`0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2`, built from reviewed
 upstream commit `651f6372754e60e3f936b3397040eb0f1e44c9f3`. The candidate remains
-`UNFROZEN` until final native artifacts and official StartOS image identities
-are recorded during the release task.
+`UNFROZEN` until final native artifacts are recorded during the release task.
+Observed official StartOS build and image identities remain a device-evidence
+input rather than a prerequisite for freezing package bytes.
 
 The currently ignored `buzz_x86_64.s9pk`, `buzz_aarch64.s9pk`, and `SHA256SUMS`
-files are preparatory and non-final. Tasks 8 and 9 change tracked package bytes,
-so rebuild the artifacts after the final tracked commit and after the security
-gates clear. Do not use their current hashes, sizes, commitments, or manifests
+files are preparatory and non-final. Rebuild the artifacts after the final
+tracked commit and before freezing the candidate. Do not use their current
+hashes, sizes, commitments, or manifests
 as candidate identity or device evidence.
+Rebuild both native artifacts from the final tracked commit.
 
 The accepted OS lineage is the official `start-os/v0.4.0` tag from
 `https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0`
 at commit `514af0c2fa076c8b597d9861f882bdb1b3411d9e`. Record the distinct build ID
-and image SHA-256 used on each architecture in the candidate contract before
-executing production evidence.
+and image SHA-256 used on each architecture in each device record. Candidate
+fields remain null until those values are observed and reviewed.
 
 ## Roles And Equipment
 
@@ -56,11 +59,12 @@ restore diagnostics.
 ## Freeze The Candidate
 
 The unfrozen contract already records the proposed package version and upstream
-commit. Before the first gate, and only after security remediation and the final
-tracked commit, record one candidate tag, package commit, signer fingerprint,
-SDK version, native archive names, byte sizes, SHA-256 hashes, and observed
-native StartOS device-image identities in `DEVICE_CANDIDATE.json`, then change
-its state to `FROZEN`. Both architectures must use those exact values. Do not
+commit. Before the first gate, and only after the final tracked commit, record
+one candidate tag, package commit, signer fingerprint, SDK version, native
+archive names, byte sizes, and SHA-256 hashes in `DEVICE_CANDIDATE.json`, then
+change its state to `FROZEN`. Leave the StartOS `buildId` and `imageSha256`
+fields null until the corresponding devices are observed. Both architectures
+must use the exact frozen package values. Do not
 invent an identity to exercise the release workflow; automated tests use a
 separate injected frozen fixture. The candidate contract is closed: unknown
 fields at any level are rejected rather than ignored.

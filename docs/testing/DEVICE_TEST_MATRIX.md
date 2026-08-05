@@ -6,10 +6,10 @@ official stable StartOS `0.4.0` release and an exact build identifier. The
 manifest value `0.4.0-beta.10` is the SDK compatibility floor; it is not the
 tested device version or a substitute for device evidence.
 
-The staged candidate is **SECURITY-BLOCKED** and therefore **NO-GO** for both
-Community Registry beta submission and production promotion. It remains
-`UNFROZEN`; no row below has been executed and all 46 device cells remain
-unexecuted.
+The staged candidate is **AUTOMATION-CLEAR** but remains **NO-GO** for both
+Community Registry beta submission and production promotion until its signed
+artifacts are frozen and the required device gates pass. It remains `UNFROZEN`;
+no row below has been executed and all 46 device cells remain unexecuted.
 
 ## Candidate Identity
 
@@ -17,14 +17,14 @@ unexecuted.
 the reviewed proposed package version and upstream source while leaving the
 candidate tag, package commit, per-architecture artifact, and per-architecture
 StartOS image identities null. Those frozen-only values cannot be recorded
-until the security gate clears and the final tracked commit exists. Every later
+until the final tracked commit and signed artifacts exist. Every later
 evidence record must exactly match the resulting frozen contract.
 
 | Field                     | Required value                                                            |
 | ------------------------- | ------------------------------------------------------------------------- |
-| Candidate state           | `UNFROZEN` — `SECURITY-BLOCKED` / `NO-GO`                                 |
+| Candidate state           | `UNFROZEN` — `AUTOMATION-CLEAR` / `NO-GO`                                 |
 | Candidate tag             | Null until final freeze                                                   |
-| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:1`                      |
+| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2`                      |
 | Package commit            | Null until final freeze                                                   |
 | Upstream Buzz commit      | `651f6372754e60e3f936b3397040eb0f1e44c9f3`                                |
 | Release signer            | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
@@ -34,8 +34,8 @@ evidence record must exactly match the resulting frozen contract.
 | StartOS device identities | Null x86_64/aarch64 build IDs and image hashes until observed             |
 
 The ignored `buzz_x86_64.s9pk`, `buzz_aarch64.s9pk`, and `SHA256SUMS` files are
-preparatory and non-final. Tasks 8 and 9 change tracked package bytes, so rebuild
-the artifacts after the final tracked commit and after the security gates clear.
+preparatory and non-final. Rebuild the artifacts after the final tracked commit
+and before freezing the candidate.
 Do not copy their present hashes, sizes, or commitments into the candidate.
 
 Changing a package, image, source, version, signature, or archive byte creates a
@@ -45,8 +45,8 @@ rebuilt or replaced.
 
 ## Community Registry Beta Minimum
 
-Security remediation and a passing final scan are prerequisites. After that,
-the minimum Community Registry beta device gate requires independently reviewed
+Security remediation and the final scan pass. The minimum Community Registry
+beta device gate now requires independently reviewed
 real-device evidence on both native x86_64 and native aarch64 for each of these
 outcomes:
 
