@@ -6,11 +6,11 @@ Date: 2026-08-04
 
 | Promotion boundary                   | Decision  | Reason                                                                                                                |
 | ------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| Start9 Community Registry beta       | **NO-GO** | The dependency and native-image security gates fail, repository controls fail, and beta device tests are unperformed. |
-| Start9 Community Registry production | **NO-GO** | Every beta blocker remains, all 46 production cells are `NOT RUN`, and production review controls are incomplete.     |
+| Start9 Community Registry beta       | **NO-GO** | The dependency and native-image security gates fail, final artifacts do not exist, and beta device tests are unperformed. |
+| Start9 Community Registry production | **NO-GO** | Every beta blocker remains and all 46 production cells are `NOT RUN`.                                                     |
 
 This is a fail-closed report. A successful source build does not override a
-security, repository-control, artifact, client, or real-device blocker. The
+runtime-security, artifact, client, or real-device blocker. The
 package must not be submitted, tagged, released, or represented as registry
 ready from the evidence below.
 
@@ -240,21 +240,23 @@ The exact public-boundary audit found:
 - no evidence of a private key or live bearer credential in the reviewed diff.
 
 The external repository-control audit reported 7 PASS, 4 FAIL, and 2 INFO
-results across its 13 readbacks. It failed on these four required controls:
+results across its 13 readbacks. It found these optional hardening gaps:
 
 1. immutable releases are disabled;
 2. no active `main` ruleset exists;
 3. no active release-tag ruleset exists; and
 4. independent release approval is not enforced.
 
-The two informational results are absent optional legacy readbacks for main
-branch protection and commit-signature protection. They are neither passes nor
-additional blockers; the active ruleset checks above are authoritative.
+The two informational results are absent legacy readbacks for main branch
+protection and commit-signature protection.
 
-The release environment still needs a second trusted reviewer and self-review
-prevention. The exact required remediation is documented in
-[`REPOSITORY-CONTROLS.md`](../security/REPOSITORY-CONTROLS.md). These failures
-block both beta submission and production promotion.
+**Repository governance is not a gate** for Start9 Community Registry
+submission. These settings protect releases published directly from this
+source repository, while Start9 forks the package into `Start9-Community` and
+applies its own PR and publishing controls. The optional recommendations remain
+documented in [`REPOSITORY-CONTROLS.md`](../security/REPOSITORY-CONTROLS.md),
+but they do not block beta submission or production promotion of tested package
+bytes.
 
 ## Device And Upgrade Evidence
 
@@ -320,17 +322,15 @@ Once every beta prerequisite is green, the verified local guide's flow is:
    re-audit the changed runtime and compatibility contract, publish exact new
    runtime/security evidence, and update the full identity cascade. Do not reuse
    the `651f637` evidence for different bytes.
-4. Enable and read back immutable releases, active `main` and release-tag
-   rulesets, and independent approval with a distinct trusted reviewer.
-5. Rebuild x86_64 and aarch64 packages from the final reviewed commit. Verify
+4. Rebuild x86_64 and aarch64 packages from the final reviewed commit. Verify
    checksum, signer, manifest, commitment, native-only image contents, and exact
    package Git hash; then freeze one immutable candidate identity.
-6. On official stable StartOS x86_64 and aarch64 devices, independently review
+5. On official stable StartOS x86_64 and aarch64 devices, independently review
    clean install, pre-setup block, complete setup, both interface health checks,
    authenticated main-relay publish/query, Desktop and ACP WSS connectivity,
    pairing QR generation, formal `UPG-01` from the published `dd222a5:2`
    artifacts, hard uninstall, and clean reinstall.
-7. Re-run the public-boundary and submission checklist and obtain final
+6. Re-run the public-boundary and submission checklist and obtain final
    independent approval before the manual submission email.
 
 Unmodified Android LAN pairing and remote mobile remain explicitly unclaimed;

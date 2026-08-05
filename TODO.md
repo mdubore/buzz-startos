@@ -31,9 +31,6 @@ are recorded in
       reproducible build provenance and review rationale. Reconcile image pins,
       current release notes, `docs/EVIDENCE.md`, the `UNFROZEN` proposed
       candidate identity, relevant README/instructions, and all tests together.
-- [ ] Clear the four failed repository controls: enable and read back immutable
-      releases, active `main` and release-tag rulesets, and independent release
-      approval with a second trusted reviewer and self-review prevention.
 - [ ] Build and inspect native x86_64 and aarch64 artifacts from the final
       reviewed commit. The ignored archives built at `f8612ccc` are preparatory
       and non-final. Generate and validate `SHA256SUMS`, inspect manifests and
@@ -68,7 +65,7 @@ are recorded in
       pairing QR, and formal upgrade evidence, are the minimum beta device
       gate.
 - [ ] Obtain independent final beta review of the runtime contract, security
-      remediation and re-scan, repository controls, native artifacts, both
+      remediation and re-scan, native artifacts, both
       architecture device runs, client compatibility, upgrade evidence, and
       Community Registry documentation.
 - [ ] After every beta prerequisite passes, manually email the public
@@ -100,8 +97,8 @@ are recorded in
       attachment IDs. Verify that provenance in `verify:device-promotion` and
       only then replace the fail-closed `PENDING` binding contract.
 - [ ] Obtain independent final production review of all 46 evidence cells,
-      backup/restore and cross-architecture results, resource soaks, repository
-      controls, immutable beta artifacts, and authenticated evidence binding.
+      backup/restore and cross-architecture results, resource soaks, immutable
+      beta artifacts, and authenticated evidence binding.
 - [ ] Pass the strict `npm run verify:device-promotion` gate for those exact
       reviewed records and immutable assets.
 - [ ] Only after the production review passes, request promotion of the tested

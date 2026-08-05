@@ -684,6 +684,10 @@ test('security operations cover signer lifecycle and repository control gaps', (
 
 test('documents the manual Community Registry submission boundary', () => {
   const contributing = repositoryFile('CONTRIBUTING.md')
+  const controls = repositoryFile('docs/security/REPOSITORY-CONTROLS.md')
+  const readiness = repositoryFile(
+    'docs/operations/COMMUNITY_REGISTRY_READINESS.md',
+  )
 
   assert.match(contributing, /submissions@start9\.com/i)
   assert.match(
@@ -702,4 +706,15 @@ test('documents the manual Community Registry submission boundary', () => {
     /email[\s\S]{0,240}push[\s\S]{0,240}pull request[\s\S]{0,240}promotion[\s\S]{0,240}manual/i,
   )
   assert.match(contributing, /not (?:yet )?(?:performed|submitted|published)/i)
+
+  assert.match(controls, /optional maintainer hardening/i)
+  assert.match(
+    controls,
+    /not (?:a |an )?Start9 Community Registry (?:submission|admission) gate/i,
+  )
+  assert.match(readiness, /repository governance[\s\S]{0,120}not a gate/i)
+  assert.doesNotMatch(
+    readiness,
+    /Community Registry beta[\s\S]{0,180}repository controls fail/i,
+  )
 })

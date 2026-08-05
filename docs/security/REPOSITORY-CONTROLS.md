@@ -1,5 +1,14 @@
 # Repository Controls
 
+## Scope
+
+These controls are optional maintainer hardening for releases published from
+`mdubore/buzz-startos`. They are not a Start9 Community Registry admission gate.
+Start9 forks the public package repository into `Start9-Community` and
+applies its own pull-request and publishing controls there. Missing rulesets,
+immutable GitHub Releases, or a second reviewer in this source repository must
+not block building, testing, or submitting an otherwise valid `.s9pk` package.
+
 ## Current State
 
 This snapshot was verified against `mdubore/buzz-startos` on 2026-07-29 using
@@ -52,7 +61,7 @@ Review every Dependabot action update for:
 - permission or input changes; and
 - the focused workflow-policy and YAML checks.
 
-## Required `main` Ruleset
+## Recommended `main` Ruleset
 
 Do not activate a ruleset that locks out the sole administrator. First add a
 second trusted collaborator and observe the exact check names on a pull
@@ -70,7 +79,7 @@ Do not invent status-check names in advance. Capture the names GitHub reports
 from a real pull request, stage the ruleset in evaluate mode when available,
 and test normal and emergency paths before active enforcement.
 
-## Required Release Tag Ruleset
+## Recommended Release Tag Ruleset
 
 After the release workflow rewrite and second-reviewer setup, add a ruleset for
 `refs/tags/v*.*` that restricts creation to the release path and blocks tag
@@ -126,7 +135,8 @@ guarantee.
 ## Read-Back Audit
 
 Run `scripts/audit-repository-controls.sh mdubore/buzz-startos` after any
-control change and before a production release. It queries every required
+control change and before relying on this repository's own GitHub release
+workflow. It queries every configured
 endpoint, prints only PASS/FAIL labels, collects all failures, and exits
 nonzero at the end. An HTTP 404 is a failed required control, but it does not
 stop later readbacks.
