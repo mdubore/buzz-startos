@@ -364,6 +364,8 @@ git commit -m "docs: stage remediated registry candidate"
 - Modify after artifact build: `docs/testing/DEVICE_CANDIDATE.json`
 - Modify after artifact build: `docs/testing/DEVICE_TEST_RUNBOOK.md`
 - Modify after artifact build: `docs/operations/COMMUNITY_REGISTRY_READINESS.md`
+- Modify: `scripts/device-evidence-validator.ts`
+- Modify: `tests/device-evidence.test.ts`
 
 **Step 1: Select the immutable source commit and tag**
 
@@ -393,27 +395,49 @@ sha256sum -c SHA256SUMS
 Require architecture, version, source commit, packaged image digests, and signer
 to match the reviewed candidate.
 
-**Step 4: Freeze evidence after the tag**
+**Step 4: Remove the circular pre-device identity requirement test-first**
+
+Add a failing validator test proving a `FROZEN` package candidate may retain
+null StartOS architecture `buildId` and `imageSha256` fields before device
+testing. Package tag, package commit, archive hashes, sizes, version, upstream
+commit, and signer remain mandatory. Each device record must still supply its
+actual stable StartOS build/image identity, and cross-record consistency remains
+enforced during step 5 and step 6.
+
+Run:
+
+```bash
+npx tsx --test tests/device-evidence.test.ts
+```
+
+Expected before implementation: FAIL because the current validator requires
+device identities to freeze package bytes. Update the validator and runbook,
+then rerun and require PASS.
+
+**Step 5: Freeze package evidence after the tag**
 
 Update `DEVICE_CANDIDATE.json` to `FROZEN` with the tag, package commit, exact
-artifact hashes/sizes, and the stable StartOS device image/build identities the
-user will test. This evidence commit intentionally follows the immutable
-package tag, so it does not create a recursive artifact hash.
+artifact hashes/sizes, version, upstream commit, and signer. Leave StartOS
+device image/build identities null until the user records the actual stable
+build used by each architecture in step 5. This evidence commit intentionally
+follows the immutable package tag, so it does not create a recursive artifact
+hash.
 
-**Step 5: Copy accessible artifacts and verify copies**
+**Step 6: Copy accessible artifacts and verify copies**
 
 Copy the final `.s9pk` files and `SHA256SUMS` to
 `/home/missydog/Desktop/Learnding/Tools/Buzz/` with candidate-specific names,
 then compare hashes byte-for-byte with the worktree originals.
 
-**Step 6: Validate and commit the freeze**
+**Step 7: Validate and commit the freeze**
 
 ```bash
 npx tsx --test tests/device-evidence.test.ts
 npm run verify:device-evidence
 git add docs/testing/DEVICE_CANDIDATE.json \
   docs/testing/DEVICE_TEST_RUNBOOK.md \
-  docs/operations/COMMUNITY_REGISTRY_READINESS.md
+  docs/operations/COMMUNITY_REGISTRY_READINESS.md \
+  scripts/device-evidence-validator.ts tests/device-evidence.test.ts
 git commit -m "test: freeze Buzz StartOS device candidate"
 ```
 
