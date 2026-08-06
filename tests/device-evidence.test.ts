@@ -505,12 +505,12 @@ async function loadValidator(): Promise<DeviceEvidenceValidator> {
   return loaded
 }
 
-test('stages the conventional v0.5.4 candidate before new artifacts are frozen', async () => {
+test('freezes the exact conventional v0.5.4 release artifacts', async () => {
   const validator = await loadValidator()
   const candidate = await validator.loadCandidateContract(candidatePath)
 
   assert.equal(candidate.schemaVersion, 1)
-  assert.equal(candidate.state, 'UNFROZEN')
+  assert.equal(candidate.state, 'FROZEN')
   assert.deepEqual(candidate.startos, {
     releaseLine: '0.4.0',
     releaseTag: 'start-os/v0.4.0',
@@ -526,16 +526,29 @@ test('stages the conventional v0.5.4 candidate before new artifacts are frozen',
     candidate.package.signerFingerprint,
     'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
   )
-  assert.equal(candidate.package.tag, null)
+  assert.equal(candidate.package.tag, 'v0.5.4_0')
   assert.equal(candidate.package.version, '0.5.4:0')
-  assert.equal(candidate.package.packageCommit, null)
+  assert.equal(
+    candidate.package.packageCommit,
+    'b38d4f1c6079f47af7032d58fd11eb09efa9a036',
+  )
   assert.equal(
     candidate.package.upstreamCommit,
     '651f6372754e60e3f936b3397040eb0f1e44c9f3',
   )
   assert.deepEqual(candidate.package.artifacts, {
-    x86_64: { name: 'buzz_x86_64.s9pk', sha256: null, sizeBytes: null },
-    aarch64: { name: 'buzz_aarch64.s9pk', sha256: null, sizeBytes: null },
+    x86_64: {
+      name: 'buzz_x86_64.s9pk',
+      sha256:
+        'a60a87eb769aa1fd24180f47450103cc7a93b52abb9d15c63f20e118d897930a',
+      sizeBytes: 189480487,
+    },
+    aarch64: {
+      name: 'buzz_aarch64.s9pk',
+      sha256:
+        'dceaf800f2d8f849df7818a6333a3445a07b7dd18afd190ee88adf0676e5e88c',
+      sizeBytes: 175124014,
+    },
   })
   assert.equal(
     candidate.promotionControls.authenticatedOperatorReviewerBinding,
@@ -2246,8 +2259,17 @@ test('documents the ordered stable StartOS production run', async () => {
   ])
 
   for (const document of [matrix, runbook]) {
-    assert.match(document, /NO-GO/i)
-    assert.match(document, /UNFROZEN/i)
+    assert.match(document, /AUTOMATION-CLEAR[\s\S]{0,120}NO-GO/i)
+    assert.match(document, /FROZEN/i)
+    assert.match(document, /b38d4f1c6079f47af7032d58fd11eb09efa9a036/)
+    assert.match(
+      document,
+      /a60a87eb769aa1fd24180f47450103cc7a93b52abb9d15c63f20e118d897930a/,
+    )
+    assert.match(
+      document,
+      /dceaf800f2d8f849df7818a6333a3445a07b7dd18afd190ee88adf0676e5e88c/,
+    )
     assert.match(document, /0\.5\.4:0/)
     assert.match(document, /651f6372754e60e3f936b3397040eb0f1e44c9f3/)
     assert.match(document, /Community Registry beta/i)

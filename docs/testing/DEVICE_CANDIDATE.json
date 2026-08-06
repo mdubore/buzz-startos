@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "state": "UNFROZEN",
+  "state": "FROZEN",
   "startos": {
     "releaseLine": "0.4.0",
     "releaseTag": "start-os/v0.4.0",
@@ -18,9 +18,9 @@
     }
   },
   "package": {
-    "tag": null,
+    "tag": "v0.5.4_0",
     "version": "0.5.4:0",
-    "packageCommit": null,
+    "packageCommit": "b38d4f1c6079f47af7032d58fd11eb09efa9a036",
     "upstreamCommit": "651f6372754e60e3f936b3397040eb0f1e44c9f3",
     "signerFingerprint": "sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c",
     "manifestMinimumStartos": "0.4.0-beta.10",
@@ -28,13 +28,13 @@
     "artifacts": {
       "x86_64": {
         "name": "buzz_x86_64.s9pk",
-        "sha256": null,
-        "sizeBytes": null
+        "sha256": "a60a87eb769aa1fd24180f47450103cc7a93b52abb9d15c63f20e118d897930a",
+        "sizeBytes": 189480487
       },
       "aarch64": {
         "name": "buzz_aarch64.s9pk",
-        "sha256": null,
-        "sizeBytes": null
+        "sha256": "dceaf800f2d8f849df7818a6333a3445a07b7dd18afd190ee88adf0676e5e88c",
+        "sizeBytes": 175124014
       }
     }
   },

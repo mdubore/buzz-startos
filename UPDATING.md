@@ -31,9 +31,10 @@ Its upstream portion is the exact official Buzz snapshot
 first StartOS wrapper revision for that stable upstream release. The candidate retains the
 production-readiness controls, disposable Git-cache repair, and dedicated
 LAN-only pairing relay. The dependency and ten-manifest OCI gates pass for the
-r2 runtime. The signed x86_64 and aarch64 packages have not yet been frozen in
-`docs/testing/DEVICE_CANDIDATE.json`; live StartOS/device validation also
-remains incomplete. The current security evidence is in
+r2 runtime. Exact signed x86_64 and aarch64 packages from commit
+`b38d4f1c6079f47af7032d58fd11eb09efa9a036` are frozen in
+`docs/testing/DEVICE_CANDIDATE.json`; live StartOS/device validation remains
+incomplete. The current security evidence is in
 `docs/security/651f637-startos-r2-runtime-scan.md`.
 
 The candidate's immutable Buzz image pins are:

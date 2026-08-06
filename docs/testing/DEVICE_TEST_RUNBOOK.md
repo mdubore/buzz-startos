@@ -6,23 +6,30 @@ hardware. The target is the official stable StartOS `0.4.0` release with its
 exact build identity recorded. Manifest minimum `0.4.0-beta.10` is only the
 compatibility floor; a beta installation cannot satisfy this runbook.
 
-The staged candidate remains **NO-GO** for both Community Registry beta
-submission and production promotion. Its signed native artifacts are
-`UNFROZEN`; no automated, static, image, or host-only result may be promoted to
-real-device evidence.
+The staged candidate is **AUTOMATION-CLEAR** but remains **NO-GO** for both
+Community Registry beta submission and production promotion until the required
+device gates pass. Its exact signed native artifacts are `FROZEN`; no automated,
+static, image, or host-only result may be promoted to real-device evidence.
 
 This document defines the procedure. It does not report that any procedure has
 run. [`DEVICE_CANDIDATE.json`](DEVICE_CANDIDATE.json) is the machine-readable
 candidate identity and [`DEVICE_TEST_MATRIX.md`](DEVICE_TEST_MATRIX.md) is the
 authoritative execution status. The proposed package version is `0.5.4:0`,
 built from reviewed upstream commit
-`651f6372754e60e3f936b3397040eb0f1e44c9f3`. The package commit and immutable
-`v0.5.4_0` source tag remain pending until the source gate passes.
+`651f6372754e60e3f936b3397040eb0f1e44c9f3`. The candidate is bound to package
+commit `b38d4f1c6079f47af7032d58fd11eb09efa9a036` and immutable source tag
+`v0.5.4_0`.
 Observed official StartOS build and image identities remain a device-evidence
 input rather than a prerequisite for freezing package bytes.
 
-The exact native archive sizes and SHA-256 hashes remain pending. Do not begin
-device testing until those values are frozen in `DEVICE_CANDIDATE.json`.
+The exact frozen native archives are:
+
+- `buzz_x86_64.s9pk`: 189,480,487 bytes, SHA-256
+  `a60a87eb769aa1fd24180f47450103cc7a93b52abb9d15c63f20e118d897930a`;
+- `buzz_aarch64.s9pk`: 175,124,014 bytes, SHA-256
+  `dceaf800f2d8f849df7818a6333a3445a07b7dd18afd190ee88adf0676e5e88c`.
+
+Do not rebuild or replace these bytes during device testing.
 
 The accepted OS lineage is the official `start-os/v0.4.0` tag from
 `https://github.com/Start9Labs/start-technologies/releases/tag/start-os/v0.4.0`
@@ -55,8 +62,7 @@ restore diagnostics.
 
 The contract records one candidate tag, package commit, signer fingerprint, SDK
 version, native archive names, byte sizes, and SHA-256 hashes in
-`DEVICE_CANDIDATE.json`. Change its state to `FROZEN` only after every value is
-verified. Leave the StartOS `buildId` and
+`DEVICE_CANDIDATE.json`; its state is `FROZEN`. Leave the StartOS `buildId` and
 `imageSha256` fields null until the corresponding devices are observed. Both
 architectures must use the exact frozen package values. Do not invent an
 identity to exercise the release workflow; automated tests use a separate
