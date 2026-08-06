@@ -16,7 +16,7 @@ import { current } from '../startos/versions/current.js'
 import { versionGraph } from '../startos/versions/index.js'
 
 const PREVIOUS_VERSION = '0.2.0-main.20260730.h.0.m.35.s.15.sha.63496.cc:2'
-const VERSION = '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2'
+const VERSION = '0.5.4:0'
 const ARCHES = ['x86_64', 'aarch64']
 const IMMUTABLE_IMAGE = /@sha256:[0-9a-f]{64}$/
 const PLACEHOLDER = new RegExp(
@@ -132,7 +132,7 @@ test('packs every runtime image from its immutable verified pin', () => {
   }
 })
 
-test('uses the audited 651f637 snapshot as the current package version', () => {
+test('uses the stable desktop-v0.5.4 release as the current package version', () => {
   assert.equal(current.options.version, VERSION)
   assert.equal(versionGraph.currentVersion().toString(), VERSION)
   assert.equal(UPSTREAM.commit, '651f6372754e60e3f936b3397040eb0f1e44c9f3')
@@ -555,7 +555,7 @@ test('documents audited 651f637 provenance and historical snapshot scope', async
   assert.doesNotMatch(localBaseline[0], /\bpublished\b/i)
   assert.match(
     updating,
-    /not evidence for the checked-out\s+`651f637:2` candidate/i,
+    /not evidence for the checked-out\s+`0\.5\.4:0` candidate/i,
   )
   assert.match(updating, /651f637` security checkpoint/i)
   assert.doesNotMatch(updating, /clean, fast-forward-only mirror/i)

@@ -6,10 +6,9 @@ official stable StartOS `0.4.0` release and an exact build identifier. The
 manifest value `0.4.0-beta.10` is the SDK compatibility floor; it is not the
 tested device version or a substitute for device evidence.
 
-The staged candidate is **AUTOMATION-CLEAR** but remains **NO-GO** for both
-Community Registry beta submission and production promotion until the required
-device gates pass. Its exact signed native artifacts are `FROZEN`; no row below
-has been executed and all 46 device cells remain unexecuted.
+The staged candidate remains **NO-GO** for both Community Registry beta
+submission and production promotion. Its native artifacts are `UNFROZEN`; no
+row below has been executed and all 46 device cells remain unexecuted.
 
 ## Candidate Identity
 
@@ -21,20 +20,19 @@ match the frozen package contract and record its observed StartOS identity.
 
 | Field                     | Required value                                                            |
 | ------------------------- | ------------------------------------------------------------------------- |
-| Candidate state           | `FROZEN` — `AUTOMATION-CLEAR` / `NO-GO`                                   |
-| Candidate tag             | `v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2`                     |
-| Proposed package version  | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2`                      |
-| Package commit            | `0021af0a5b151b24701ed4a7f68c131a69156c32`                                |
+| Candidate state           | `UNFROZEN` — `NO-GO`                                                       |
+| Candidate tag             | Pending immutable `v0.5.4_0` source tag                                   |
+| Proposed package version  | `0.5.4:0`                                                                 |
+| Package commit            | Pending source commit                                                      |
 | Upstream Buzz commit      | `651f6372754e60e3f936b3397040eb0f1e44c9f3`                                |
 | Release signer            | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
-| x86_64 final artifact     | 189,480,673 bytes; `fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d` |
-| aarch64 final artifact    | 175,124,200 bytes; `cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086` |
+| x86_64 final artifact     | Pending build and verification                                            |
+| aarch64 final artifact    | Pending build and verification                                            |
 | StartOS source            | `start-os/v0.4.0` at `514af0c2fa076c8b597d9861f882bdb1b3411d9e`           |
 | StartOS device identities | Null x86_64/aarch64 build IDs and image hashes until observed             |
 
-The ignored build outputs named above are the exact frozen archives only when
-their sizes and hashes match this table. Do not rebuild or replace them during
-device testing.
+Do not begin device testing until the ignored build outputs are frozen with
+their exact sizes and hashes in this table and `DEVICE_CANDIDATE.json`.
 
 Changing a package, image, source, version, signature, or archive byte creates a
 new candidate and resets every result. Evidence may be committed after the

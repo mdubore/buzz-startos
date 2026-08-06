@@ -505,12 +505,12 @@ async function loadValidator(): Promise<DeviceEvidenceValidator> {
   return loaded
 }
 
-test('binds the frozen native artifacts while deferring observed StartOS identities', async () => {
+test('stages the conventional v0.5.4 candidate before new artifacts are frozen', async () => {
   const validator = await loadValidator()
   const candidate = await validator.loadCandidateContract(candidatePath)
 
   assert.equal(candidate.schemaVersion, 1)
-  assert.equal(candidate.state, 'FROZEN')
+  assert.equal(candidate.state, 'UNFROZEN')
   assert.deepEqual(candidate.startos, {
     releaseLine: '0.4.0',
     releaseTag: 'start-os/v0.4.0',
@@ -526,35 +526,16 @@ test('binds the frozen native artifacts while deferring observed StartOS identit
     candidate.package.signerFingerprint,
     'sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c',
   )
-  assert.equal(
-    candidate.package.tag,
-    'v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2',
-  )
-  assert.equal(
-    candidate.package.version,
-    '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2',
-  )
-  assert.equal(
-    candidate.package.packageCommit,
-    '0021af0a5b151b24701ed4a7f68c131a69156c32',
-  )
+  assert.equal(candidate.package.tag, null)
+  assert.equal(candidate.package.version, '0.5.4:0')
+  assert.equal(candidate.package.packageCommit, null)
   assert.equal(
     candidate.package.upstreamCommit,
     '651f6372754e60e3f936b3397040eb0f1e44c9f3',
   )
   assert.deepEqual(candidate.package.artifacts, {
-    x86_64: {
-      name: 'buzz_x86_64.s9pk',
-      sha256:
-        'fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d',
-      sizeBytes: 189480673,
-    },
-    aarch64: {
-      name: 'buzz_aarch64.s9pk',
-      sha256:
-        'cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086',
-      sizeBytes: 175124200,
-    },
+    x86_64: { name: 'buzz_x86_64.s9pk', sha256: null, sizeBytes: null },
+    aarch64: { name: 'buzz_aarch64.s9pk', sha256: null, sizeBytes: null },
   })
   assert.equal(
     candidate.promotionControls.authenticatedOperatorReviewerBinding,
@@ -767,8 +748,7 @@ for (const [label, setFrozenValue] of [
         await readFile(candidatePath, 'utf8'),
       ) as MutableCandidateContract,
     )
-    candidate.package.version =
-      '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2'
+    candidate.package.version = '0.5.4:0'
     candidate.package.upstreamCommit =
       '651f6372754e60e3f936b3397040eb0f1e44c9f3'
     setFrozenValue(candidate)
@@ -2266,21 +2246,9 @@ test('documents the ordered stable StartOS production run', async () => {
   ])
 
   for (const document of [matrix, runbook]) {
-    assert.match(document, /AUTOMATION-CLEAR[\s\S]{0,120}NO-GO/i)
-    assert.match(document, /FROZEN/i)
-    assert.match(document, /0021af0a5b151b24701ed4a7f68c131a69156c32/)
-    assert.match(
-      document,
-      /fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d/,
-    )
-    assert.match(
-      document,
-      /cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086/,
-    )
-    assert.match(
-      document,
-      /0\.2\.0-main\.20260803\.h\.17\.m\.33\.s\.19\.sha\.651\.f\.637:2/,
-    )
+    assert.match(document, /NO-GO/i)
+    assert.match(document, /UNFROZEN/i)
+    assert.match(document, /0\.5\.4:0/)
     assert.match(document, /651f6372754e60e3f936b3397040eb0f1e44c9f3/)
     assert.match(document, /Community Registry beta/i)
     assert.match(document, /clean install/i)

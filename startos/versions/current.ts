@@ -1,7 +1,7 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
 
 export const current = VersionInfo.of({
-  version: '0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2',
+  version: '0.5.4:0',
   releaseNotes: {
     en_US:
       'Updates the bundled server snapshot released with Buzz Desktop v0.5.4, including corrected NIP-11 limits and workspace-icon handling, multi-repository projects, safer Git default-branch deletion, and upstream security dependency fixes. This downstream revision rebuilds Buzz, MinIO, and the MinIO client on patched Alpine 3.24 runtimes. Retains the dedicated LAN-only pairing relay; this package does not enable remote mobile access. [Complete Buzz Desktop v0.5.4 release notes](https://github.com/block/buzz/releases/tag/desktop-v0.5.4).',

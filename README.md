@@ -289,8 +289,8 @@ subcontainers, not dependencies on other StartOS services.
 ## Limitations and Differences
 
 1. The canonical URL is immutable; no host-rename migration exists.
-2. The package is a frozen device-test candidate and is not eligible for
-   Community Registry submission until the required real-device checks pass.
+2. The package is a staged device-test candidate. Its final native archives
+   must be frozen before real-device qualification or registry submission.
 3. Remote mobile is unsupported. In the current private-CA configuration,
    unmodified Android rejects the StartOS Root CA path and secure pairing fails.
 4. Tenant-bearing requests for unknown hosts fail closed.
@@ -321,10 +321,11 @@ for product behavior not changed here.
 ## Evidence and Build Workflow
 
 The machine-readable device identity template is
-[`DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json) and is `FROZEN`
-to the exact signed native archives. `npm run verify:device-evidence` validates
-evidence structure; `npm run verify:device-promotion` additionally requires a
-frozen candidate, all 46 passing cells, and authenticated independent review.
+[`DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json). It remains
+`UNFROZEN` until both signed native archives are built and recorded.
+`npm run verify:device-evidence` validates evidence structure;
+`npm run verify:device-promotion` additionally requires a frozen candidate,
+all 46 passing cells, and authenticated independent review.
 
 Evidence attachments must be local SHA-256-verified regular files no larger
 than 16 MiB. Symbolic links are rejected. Validation uses no-follow file

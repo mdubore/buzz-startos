@@ -23,18 +23,17 @@ with `git rev-parse upstream/main`.
 The checked-out device-test candidate identity is:
 
 ```text
-0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2
+0.5.4:0
 ```
 
 Its upstream portion is the exact official Buzz snapshot
-`651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:2` records the second downstream
-runtime-image security rebuild of that snapshot. The candidate retains the
+`desktop-v0.5.4` at `651f6372754e60e3f936b3397040eb0f1e44c9f3`; `:0` is the
+first StartOS wrapper revision for that stable upstream release. The candidate retains the
 production-readiness controls, disposable Git-cache repair, and dedicated
 LAN-only pairing relay. The dependency and ten-manifest OCI gates pass for the
-r2 runtime. Exact signed x86_64 and aarch64 packages from commit
-`0021af0a5b151b24701ed4a7f68c131a69156c32` are frozen in
-`docs/testing/DEVICE_CANDIDATE.json`; live StartOS/device validation remains
-incomplete. The current security evidence is in
+r2 runtime. The signed x86_64 and aarch64 packages have not yet been frozen in
+`docs/testing/DEVICE_CANDIDATE.json`; live StartOS/device validation also
+remains incomplete. The current security evidence is in
 `docs/security/651f637-startos-r2-runtime-scan.md`.
 
 The candidate's immutable Buzz image pins are:
@@ -525,7 +524,7 @@ tag.
 
 The `dd222a5` and `63496cc` scan records are historical evidence for their
 respective package snapshots. They are not evidence for the checked-out
-`651f637:2` candidate. Candidate evidence comes from the `651f637` runtime
+`0.5.4:0` candidate. Candidate evidence comes from the `651f637` runtime
 contract, `651f637` security checkpoint, and immutable pins.
 
 ## 7. Update Package Metadata

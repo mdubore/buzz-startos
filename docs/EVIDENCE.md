@@ -18,8 +18,8 @@ index instead of embedding volatile commit identities.
 - [Underlying upstream application contract](upstream/651f637-runtime-contract.md)
 
 The fail-closed dependency and OCI security gates are clear for the rebuilt r2
-runtime. The signed native package bytes are frozen in
-[`DEVICE_CANDIDATE.json`](testing/DEVICE_CANDIDATE.json); the candidate still
+runtime. The signed native package bytes are not yet frozen in
+[`DEVICE_CANDIDATE.json`](testing/DEVICE_CANDIDATE.json); the candidate also
 requires real StartOS device evidence. This index does not replace or summarize those records; follow
 the linked documents for exact identities, scanner results, and remaining
 gates. The historical failing checkpoint remains at

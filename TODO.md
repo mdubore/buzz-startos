@@ -1,14 +1,16 @@
 # Remaining Release Work
 
 The dependency, native runtime-image, immutable-pin, provenance, compatibility,
-and ten-manifest OCI gates pass for package revision `651f637:2`. Current exact
+and ten-manifest OCI gates pass for StartOS package version `0.5.4:0`. Current
 evidence is indexed by [`docs/EVIDENCE.md`](docs/EVIDENCE.md); the current
 decision is in
 [`COMMUNITY_REGISTRY_READINESS.md`](docs/operations/COMMUNITY_REGISTRY_READINESS.md).
-The exact frozen package identity is in
+The staged package identity is in
 [`DEVICE_CANDIDATE.json`](docs/testing/DEVICE_CANDIDATE.json).
 
 ## Community Registry Beta
+- [ ] Build, verify, and freeze the signed x86_64 and aarch64 `0.5.4:0`
+      archives from the immutable `v0.5.4_0` source tag.
 - [ ] Perform clean installs on real x86_64 and aarch64 stable StartOS devices.
       Complete initial and pairing setup, start all daemons, and confirm UI
       access, both exported relay interfaces, both health checks, and an

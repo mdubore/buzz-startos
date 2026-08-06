@@ -1,35 +1,35 @@
-# Community Registry Readiness — Buzz `651f637:2`
+# Community Registry Readiness — Buzz `0.5.4:0`
 
-Date: 2026-08-04
+Date: 2026-08-06
 
 ## Decision
 
 | Promotion boundary | Decision | Current reason |
 | --- | --- | --- |
-| Start9 Community Registry beta | **NO-GO** | Automated package, runtime-security, and signed-artifact gates pass, but the required native StartOS beta device checks are unperformed. |
+| Start9 Community Registry beta | **NO-GO** | Runtime-security gates pass, but final signed artifacts are not frozen and the required native StartOS beta device checks are unperformed. |
 | Start9 Community Registry production | **NO-GO** | The candidate is not beta-qualified and all 46 production device cells remain `NOT RUN`. |
 
-The candidate is **AUTOMATION-CLEAR**, `FROZEN`, and staged for device testing.
-This status does not turn source, container, or host-only checks into
-StartOS device evidence and does not authorize a registry submission.
+The candidate is `UNFROZEN` and remains **NO-GO**. Source and runtime-image
+checks do not turn into signed-artifact or StartOS device evidence and do not
+authorize a registry submission.
 
 ## Candidate Identity
 
 | Field | Reviewed value |
 | --- | --- |
-| Package version | `0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637:2` |
+| Package version | `0.5.4:0` |
 | Upstream Buzz | `desktop-v0.5.4`, commit `651f6372754e60e3f936b3397040eb0f1e44c9f3` |
-| Candidate state | `FROZEN` |
-| Candidate tag/commit | `v0.2.0-main.20260803.h.17.m.33.s.19.sha.651.f.637_2` / `0021af0a5b151b24701ed4a7f68c131a69156c32` |
-| Final x86_64 archive | 189,480,673 bytes; SHA-256 `fa9217a9b0365714f4413a66bffcefe5a84371a7d8473394241c8986bb44ad1d` |
-| Final aarch64 archive | 175,124,200 bytes; SHA-256 `cc7ee18351a323c1117bc8821bdea397de5eb15b7e6f0da575c6e4ab8816d086` |
+| Candidate state | `UNFROZEN` |
+| Candidate tag/commit | Pending source commit and immutable `v0.5.4_0` tag |
+| Final x86_64 archive | Pending build and verification |
+| Final aarch64 archive | Pending build and verification |
 | Release signer | `sha256:93c525225ec039e29fea53463c4e6dd489c4fe58698bb4867f65307c6279098c` |
 | Minimum manifest StartOS | `0.4.0-beta.10` compatibility floor, not test evidence |
 
-The frozen identity is authoritative in
-[`DEVICE_CANDIDATE.json`](../testing/DEVICE_CANDIDATE.json). Its tag, package
-commit, signer, hashes, and sizes identify the only bytes eligible for this
-device run.
+The staged identity is authoritative in
+[`DEVICE_CANDIDATE.json`](../testing/DEVICE_CANDIDATE.json). The source tag,
+package commit, hashes, and sizes must be recorded there before any bytes are
+eligible for a device run.
 
 ## Cleared Automated Gates
 
@@ -43,10 +43,9 @@ device run.
   complete test suite pass; and
 - `npm run verify:images` confirms every recorded index and native manifest.
 
-The final clean source gate passed before packing. Both native manifests bind
-the exact package commit, version, SDK, and native architecture, and both
-archive signers match the reviewed key. A passing automated or artifact gate
-does not prove installation or service behavior on StartOS.
+The final clean source gate and native archive verification remain pending.
+A passing automated or artifact gate does not prove installation or service
+behavior on StartOS.
 
 ### Rebuilt Runtime Images
 
